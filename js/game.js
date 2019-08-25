@@ -8,9 +8,9 @@ var createScene = function () {
     camera.attachControl(canvas, true)
     
     // Lights
-    // var light1 = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(1, 1, 0), scene)
-    var light = new BABYLON.PointLight('light2', new BABYLON.Vector3(-5,0,1), scene)
-    
+    var light1 = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(1, 1, 0), scene)
+    var light = new BABYLON.DirectionalLight('light2', new BABYLON.Vector3(1,0,0), scene)
+    light.position.x = -500
 
     var myGround = BABYLON.MeshBuilder.CreateGround("myGround", {width: 6, height: 4, subdivisions: 4}, scene);
     // Shapes

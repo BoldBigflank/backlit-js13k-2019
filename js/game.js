@@ -44,6 +44,10 @@ var createScene = function () {
     }, scene)
     box.position = new BABYLON.Vector3(0, 1.5, 0)
 
+    var box2 = box.clone('Grabbable-Box2')
+    box2.position.y = 2
+
+
     var wall1 = BABYLON.MeshBuilder.CreateBox('wall1', {
         size:3,
         faceColors: [
@@ -60,7 +64,7 @@ var createScene = function () {
     // Shadows
     var shadowGenerator = new BABYLON.ShadowGenerator(2048, light);
     // shadowGenerator.usePoissonSampling = true
-    shadowGenerator.getShadowMap().renderList.push(box)
+    shadowGenerator.getShadowMap().renderList.push(box, box2)
     wall1.receiveShadows = true
 
     scene.registerBeforeRender(function() {

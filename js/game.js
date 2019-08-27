@@ -41,7 +41,7 @@ var createScene = () => {
     var myGround = BABYLON.MeshBuilder.CreateGround("myGround", {width: 6, height: 6, subdivisions: 4}, scene);
     // Shapes
     var box = BABYLON.MeshBuilder.CreateBox('Grabbable-Box', {
-        size: .16,
+        size: .2,
         faceColors: [
             new BABYLON.Color4(1,0,0,1),
             new BABYLON.Color4(1,0,1,1),
@@ -49,18 +49,39 @@ var createScene = () => {
             new BABYLON.Color4(0,1,1,1),
             new BABYLON.Color4(0,1,0,1),
             new BABYLON.Color4(1,1,0,1)
-        ]
+        ],
+        updatable: true
     }, scene)
+    var positions = box.getVerticesData(BABYLON.VertexBuffer.PositionKind)
+    var normals = box.getVerticesData(BABYLON.VertexBuffer.NormalKind)
+    var indices = box.getIndices()
+
+    // Turn the box into a wedge
+    for (let i = 0; i < positions.length; i=i+3) {
+        let x = positions[i]
+        let y = positions[i+1]
+        if (y > 0) {
+            positions[i] = Math.abs(positions[i])
+        } else if (x < 0) {
+            positions[i] *= 2
+        }
+    }
+    BABYLON.VertexData.ComputeNormals(positions, indices, normals)
+    box.updateVerticesData(BABYLON.VertexBuffer.PositionKind, positions)
     box.position = new BABYLON.Vector3(0, 1.5, 0)
 
     var box2 = box.clone('Grabbable-Box2')
     box2.position.y = 2
+    
+    var box3 = box.clone('Grabbable-Box3')
+    box3.position.y = 1
+    box3.scaling = new BABYLON.Vector3(2,2,2)
 
     var cylinder = BABYLON.MeshBuilder.CreateCylinder(
         "Grabbable-Cylinder",
         {
-            height: 0.2,
-            diameter: 0.15,
+            height: 0.4,
+            diameter: 0.4,
             updatable: true,
             faceColors: [
                 new BABYLON.Color4(1,0,0,1),
@@ -70,6 +91,18 @@ var createScene = () => {
         },
         scene
     )
+    var positions = cylinder.getVerticesData(BABYLON.VertexBuffer.PositionKind)
+    var normals = cylinder.getVerticesData(BABYLON.VertexBuffer.NormalKind)
+    var indices = cylinder.getIndices()
+
+    // Skew the cylinder
+    for (let i = 0; i < positions.length; i=i+3) {
+        let y = positions[i+1]
+        positions[i] += (y > 0) ? .2 : -.2
+    }
+    BABYLON.VertexData.ComputeNormals(positions, indices, normals)
+    cylinder.updateVerticesData(BABYLON.VertexBuffer.PositionKind, positions)
+
     cylinder.position = new BABYLON.Vector3(0, 1.5, -0.5)
 
     var tube = BABYLON.MeshBuilder.CreateTube(
@@ -89,6 +122,19 @@ var createScene = () => {
     )
     tube.position = new BABYLON.Vector3(0,1.5,0.5)
 
+    var torus = BABYLON.MeshBuilder.CreateTorus(
+        "Grabbable-Tube",
+        {
+            diameter: 0.4,
+            thickness: 0.2,
+            tessellation: 16
+        },
+        scene
+    )
+    torus.position = new BABYLON.Vector3(0,1.0,0.5)
+
+    
+
     var wall1 = BABYLON.MeshBuilder.CreateBox('wall1', {
         size:3,
         faceColors: [
@@ -105,7 +151,7 @@ var createScene = () => {
     // Shadows
     var shadowGenerator = new BABYLON.ShadowGenerator(2048, light);
     // shadowGenerator.usePoissonSampling = true
-    shadowGenerator.getShadowMap().renderList.push(box, box2, cylinder, tube)
+    shadowGenerator.getShadowMap().renderList.push(box, box2, box3, cylinder, tube, torus)
     wall1.receiveShadows = true
 
     scene.onBeforeRenderObservable.add(() => {

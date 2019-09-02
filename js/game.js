@@ -18,16 +18,6 @@ var grabbingController
 var lastDeviceQuaternion
 var lastDevicePosition
 
-var controllerStatus = [
-    // {
-    //     controllerId: 1,
-    //     selectedMesh: undefined,
-    //     grabbedMesh: undefined,
-    //     lastDeviceQuaternion: undefined,
-    //     lastDevicePosition: undefined
-    // }
-]
-
 var createScene = () => {
     // Scene and camera
     var scene = new BABYLON.Scene(engine)
@@ -63,6 +53,32 @@ var createScene = () => {
         ]
     }, scene)
     wall1.position = new BABYLON.Vector3(3,1.5,0)
+    wall1.receiveShadows = true
+
+
+    //Create dynamic texture
+    var textureResolution = 512;
+    var textureGround = new BABYLON.DynamicTexture("dynamic texture", {width:512, height:512}, scene);   
+    var ctx = textureGround.getContext();
+    
+    var materialGround = new BABYLON.StandardMaterial("Mat", scene);                    
+    materialGround.diffuseTexture = textureGround;
+    materialGround.backFaceCulling = false
+    
+    //Add text to dynamic texture
+    // var font = "bold 44px monospace";
+    // textureGround.drawText("Grass", 75, 135, font, "green", "white", true, true);
+    var grd = ctx.createLinearGradient(0, 0, 0, 512);
+    grd.addColorStop(0, "red");
+    grd.addColorStop(0.55, "black");
+    grd.addColorStop(1, "black");
+    ctx.fillStyle = grd;
+    ctx.fillRect(0,0, 512, 512);
+    textureGround.update()
+
+    // // // Sky
+    var stars = BABYLON.Mesh.CreateSphere('stars', 100, 100, scene)
+    stars.material = materialGround
 
     // Shapes
     var prism = BABYLON.MeshBuilder.ExtrudeShape('Grabbable-Prism1', {
@@ -167,8 +183,7 @@ var createScene = () => {
     var shadowGenerator = new BABYLON.ShadowGenerator(2048, light);
     // shadowGenerator.usePoissonSampling = true
     shadowGenerator.getShadowMap().renderList = shapes
-    wall1.receiveShadows = true
-
+    
     scene.onBeforeRenderObservable.add(() => {
         // Update the grabbed object
         if (grabbedMesh && grabbingController) {
@@ -178,6 +193,7 @@ var createScene = () => {
                 // Get the difference between the two quaternions
                 var differenceQuat = currentDeviceQuaternion.multiply( BABYLON.Quaternion.Inverse(lastDeviceQuaternion) )
                 // Add the difference to the grabbedMesh
+                grabbedMesh.rotationQuaternion = differenceQuat.multiply( grabbedMesh.rotationQuaternion.clone() )
                 grabbedMesh.rotationQuaternion = differenceQuat.multiply( grabbedMesh.rotationQuaternion.clone() )
             }
             lastDeviceQuaternion = currentDeviceQuaternion

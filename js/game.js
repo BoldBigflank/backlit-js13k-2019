@@ -7,8 +7,10 @@ const COLOR_BLUE = new BABYLON.Color3(0,0,1)
 const COLOR_CYAN = new BABYLON.Color3(0,1,1)
 const COLOR_MAGENTA = new BABYLON.Color3(1,0,1)
 const COLOR_YELLOW = new BABYLON.Color3(1,1,0)
+const COLOR_GREY = new BABYLON.Color3(.6, .5, .49)
 
 const SQRT_2 = Math.sqrt(2)
+const GRID_TO_UNITS = 1/3
 const SHAPE_SCALE = 0.1
 const SHAPE_SCALE_V3 = new BABYLON.Vector3(SHAPE_SCALE, SHAPE_SCALE, SHAPE_SCALE)
 var shapes = []
@@ -21,64 +23,115 @@ var lastDevicePosition
 var createScene = () => {
     // Scene and camera
     var scene = new BABYLON.Scene(engine)
-    var camera = new BABYLON.ArcRotateCamera(
-        'Camera', // Name
-        11 * Math.PI / 12, // alpha
-        5 * Math.PI / 12, // beta
-        2, // radius
-        new BABYLON.Vector3(0, 1.5 ,0), // target
-        scene //scene
+    var camera = new BABYLON.UniversalCamera('Camera',
+        new BABYLON.Vector3(1 * GRID_TO_UNITS, 1.5, 0),
+        scene
     )
-    camera.position.y = 2
+    camera.setTarget(new BABYLON.Vector3(10 * GRID_TO_UNITS, 1.5, 0))
+    camera.speed = 0.33
     camera.attachControl(canvas, true)
-    
-    // Lights
-    var light1 = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(1, 1, 0), scene)
-    var light = new BABYLON.DirectionalLight('light2', new BABYLON.Vector3(1,0,0), scene)
-    light.position.x = -500
 
-    var myGround = BABYLON.MeshBuilder.CreateGround("myGround", {width: 6, height: 6, subdivisions: 4}, scene);
-    
-    // Wall 
+    // Textures and Materials
+    var textureFloor = new BABYLON.DynamicTexture("FloorTexture", {width:512, height:512}, scene);   
+    var ctx = textureFloor.getContext();
+    ctx.fillStyle = '#c5765f' // #f1bdaa
+    ctx.fillRect(0,0,512,512)
+    textureFloor.update()
+    var materialFloor = new BABYLON.StandardMaterial("FloorMaterial", scene)
+    materialFloor.diffuseTexture = textureFloor
 
-    var wall1 = BABYLON.MeshBuilder.CreateBox('wall1', {
-        size:3,
-        faceColors: [
-            COLOR_MAGENTA,
-            COLOR_MAGENTA,
-            COLOR_MAGENTA,
-            COLOR_MAGENTA,
-            COLOR_MAGENTA,
-            COLOR_MAGENTA
-        ]
-    }, scene)
-    wall1.position = new BABYLON.Vector3(3,1.5,0)
-    wall1.receiveShadows = true
-
-
-    //Create dynamic texture
-    var textureResolution = 512;
-    var textureGround = new BABYLON.DynamicTexture("dynamic texture", {width:512, height:512}, scene);   
+    var textureGround = new BABYLON.DynamicTexture("GroundTexture", {width:512, height:512}, scene);   
     var ctx = textureGround.getContext();
-    
-    var materialGround = new BABYLON.StandardMaterial("Mat", scene);                    
-    materialGround.diffuseTexture = textureGround;
-    materialGround.backFaceCulling = false
-    
-    //Add text to dynamic texture
-    // var font = "bold 44px monospace";
-    // textureGround.drawText("Grass", 75, 135, font, "green", "white", true, true);
+    ctx.fillStyle = '#f1bdaa'
+    ctx.fillRect(0,0,512,512)
+    ctx.fillStyle = 'black'
+    ctx.fillRect(192, 192, 128, 128)
+    textureGround.update()
+    var materialGround = new BABYLON.StandardMaterial("GroundMaterial", scene)
+    materialGround.diffuseTexture = textureGround
+
+    var textureSky = new BABYLON.DynamicTexture("SkyTexture", {width:512, height:512}, scene);
+    var ctx = textureSky.getContext();
+    var materialSky = new BABYLON.StandardMaterial("SkyMaterial", scene);
+    materialSky.diffuseTexture = textureSky;
+    materialSky.backFaceCulling = false
     var grd = ctx.createLinearGradient(0, 0, 0, 512);
-    grd.addColorStop(0, "red");
-    grd.addColorStop(0.55, "black");
+    grd.addColorStop(0, "#d1b7ce"); // light #d1b7ce dark #1e2237
+    grd.addColorStop(0.65, "#1e2237");
     grd.addColorStop(1, "black");
     ctx.fillStyle = grd;
     ctx.fillRect(0,0, 512, 512);
-    textureGround.update()
+    textureSky.update()
+    
+    var textureShape = new BABYLON.DynamicTexture("ShapeTexture", {width:512, height:512}, scene);
+    var ctx = textureShape.getContext();
+    var materialShape = new BABYLON.StandardMaterial("ShapeMaterial", scene);
+    materialShape.diffuseTexture = textureShape;
+    ctx.fillStyle = '#3c7681';
+    ctx.fillRect(0,0, 512, 512);
+    textureShape.update()
+    
 
-    // // // Sky
-    var stars = BABYLON.Mesh.CreateSphere('stars', 100, 100, scene)
-    stars.material = materialGround
+
+    // Lights
+    var light1 = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(-1, 1, 0.01), scene)
+    light1.intensity = 0.5 // 0.5
+    var light = new BABYLON.DirectionalLight('light2', new BABYLON.Vector3(1,0,0), scene)
+    light.position.x = -500
+    light.intensity = 0.2
+
+    var floor = BABYLON.MeshBuilder.CreateGround('Floor', {
+        width:80,
+        height:50,
+        subdivisions: 5 
+    }, scene)
+    floor.position.y = -0.01
+    floor.material = materialFloor
+
+    var outsideGround = BABYLON.MeshBuilder.CreateGround("Ground-Outside", {
+        width: 11*GRID_TO_UNITS,
+        height: 10*GRID_TO_UNITS,
+        subdivisions: 4
+    }, scene);
+    outsideGround.position.x = 5*GRID_TO_UNITS
+    outsideGround.material = materialGround
+
+    var insideGround = BABYLON.MeshBuilder.CreateGround("Ground-Inside", {
+        width: 16 * GRID_TO_UNITS,
+        height: 14 * GRID_TO_UNITS,
+        subdivisions: 4
+    }, scene);
+    insideGround.position.x = 18 * GRID_TO_UNITS
+    insideGround.material = materialGround
+
+    var treasureGround = BABYLON.MeshBuilder.CreateGround("Ground-Treasure", {
+        width: 24 * GRID_TO_UNITS,
+        height: 24 * GRID_TO_UNITS,
+        subdivisions: 4
+    }, scene);
+    treasureGround.position.x = 38 * GRID_TO_UNITS
+    treasureGround.material = materialGround
+
+    // Wall
+    var wall1 = BABYLON.MeshBuilder.CreateBox('wall1', {
+        height: 9 * GRID_TO_UNITS,
+        width: 1 * GRID_TO_UNITS,
+        depth: 6 * GRID_TO_UNITS,
+        faceColors: [
+            COLOR_GREY,
+            COLOR_GREY,
+            COLOR_GREY,
+            COLOR_GREY,
+            COLOR_GREY,
+            COLOR_GREY
+        ]
+    }, scene)
+    wall1.position = new BABYLON.Vector3(10 * GRID_TO_UNITS,4.5 * GRID_TO_UNITS,0)
+    wall1.receiveShadows = true
+
+    // Sky
+    var stars = BABYLON.Mesh.CreateSphere('stars', 100, 1000, scene)
+    stars.material = materialSky
 
     // Shapes
     var prism = BABYLON.MeshBuilder.ExtrudeShape('Grabbable-Prism1', {
@@ -95,16 +148,17 @@ var createScene = () => {
         cap: BABYLON.Mesh.CAP_ALL
     }, scene)
     prism.scaling = SHAPE_SCALE_V3
-    prism.position = new BABYLON.Vector3(-0.5, 1.5, 0)
+    prism.position = new BABYLON.Vector3(5 * GRID_TO_UNITS, 1.5, 0)
+    prism.material = materialShape
     shapes.push(prism)
 
     var prism3 = prism.clone("Grabbable-Prism3")
-    prism3.position = new BABYLON.Vector3(-0.5, 1.0, -0.5)
+    prism3.position = new BABYLON.Vector3(5 * GRID_TO_UNITS, 1.0, -0.5)
     prism3.scaling = new BABYLON.Vector3(0.5 * SHAPE_SCALE, 0.5 * SHAPE_SCALE, 2 * SHAPE_SCALE)
     shapes.push(prism3)
 
     var prism4 = prism3.clone("Grabbable-Prism4")
-    prism4.position = new BABYLON.Vector3(-0.5, 2, 0)
+    prism4.position = new BABYLON.Vector3(5 * GRID_TO_UNITS, 2, 0)
     prism4.scaling = new BABYLON.Vector3(0.5 * SHAPE_SCALE, 0.5 * SHAPE_SCALE, 0.5 * SHAPE_SCALE)
     shapes.push(prism4)
 
@@ -119,7 +173,8 @@ var createScene = () => {
         arc: 0.5
     }, scene)
     prism2.scaling = SHAPE_SCALE_V3
-    prism2.position = new BABYLON.Vector3(-0.5, 1.5, 0.5)
+    prism2.position = new BABYLON.Vector3(5 * GRID_TO_UNITS, 1.5, 0.5)
+    prism2.material = materialShape
     shapes.push(prism2)
 
     var cylinder = BABYLON.MeshBuilder.CreateCylinder(
@@ -127,12 +182,7 @@ var createScene = () => {
         {
             height: SQRT_2,
             diameter: SQRT_2,
-            updatable: true,
-            faceColors: [
-                new BABYLON.Color4(1,0,0,1),
-                new BABYLON.Color4(0,0,1,1),
-                new BABYLON.Color4(0,1,1,1)
-            ]
+            updatable: true
         },
         scene
     )
@@ -147,7 +197,8 @@ var createScene = () => {
     BABYLON.VertexData.ComputeNormals(positions, indices, normals)
     cylinder.updateVerticesData(BABYLON.VertexBuffer.PositionKind, positions)
     cylinder.scaling = SHAPE_SCALE_V3
-    cylinder.position = new BABYLON.Vector3(-0.5, 1.5, -0.5)
+    cylinder.position = new BABYLON.Vector3(5 * GRID_TO_UNITS, 1.5, -0.5)
+    cylinder.material = materialShape
     shapes.push(cylinder)
 
     var donut = BABYLON.MeshBuilder.CreateLathe('Grabbable-Donut', {
@@ -163,7 +214,8 @@ var createScene = () => {
         closed: true
     }, scene)
     donut.scaling = SHAPE_SCALE_V3
-    donut.position = new BABYLON.Vector3(-0.5, 1.0, 0.5)
+    donut.position = new BABYLON.Vector3(5 * GRID_TO_UNITS, 1.0, 0.5)
+    donut.material = materialShape
     shapes.push(donut)
 
     var pyramid = BABYLON.MeshBuilder.CreateLathe('Grabbable-Pyramid', {
@@ -176,7 +228,8 @@ var createScene = () => {
         closed: true
     }, scene)
     pyramid.scaling = SHAPE_SCALE_V3
-    pyramid.position = new BABYLON.Vector3(-0.5, 1.0, 0)
+    pyramid.position = new BABYLON.Vector3(5 * GRID_TO_UNITS, 1.0, 0)
+    pyramid.material = materialShape
     shapes.push(pyramid)
 
     // Shadows
@@ -220,12 +273,18 @@ var vrHelper = scene.createDefaultVRExperience({
     createDeviceOrientationCamera: false
 });
 
-vrHelper.enableTeleportation({floorMeshName: "myGround"});
+// [outsideGround, insideGround, treasureGround]
+let floorMeshes = scene.meshes.filter(m => m.name.indexOf('Ground') !== -1)
+console.log("floorMeshes", floorMeshes)
+vrHelper.enableTeleportation({floorMeshes: floorMeshes});
 
 vrHelper.enableInteractions()
 // What meshes to interact with
 vrHelper.raySelectionPredicate = (mesh) => {
     if (mesh.name.indexOf("Grabbable") !== -1) {
+        return true;
+    }
+    if (mesh.name.indexOf("Ground") !== -1) {
         return true;
     }
     return false;
@@ -237,6 +296,7 @@ vrHelper.onAfterEnteringVRObservable.add(() => {
 
 // Keep track of the selected mesh
 vrHelper.onNewMeshSelected.add((mesh) => {
+    if (mesh.name.indexOf('Grabbable') === -1) return
     selectedMesh = mesh;
 });
 
@@ -257,7 +317,7 @@ vrHelper.onControllerMeshLoaded.add((webVRController)=>{
         //grab
         if(stateObject.value > 0.1){
             if (selectedMesh !== null) {
-                // webVRController.mesh.addChild(selectedMesh);
+                // Only grab grabbable
                 grabbedMesh = selectedMesh
                 if (!grabbedMesh.rotationQuaternion) {
                     grabbedMesh.rotationQuaternion = new BABYLON.Vector4(0,0,0,1)

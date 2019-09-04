@@ -20,14 +20,19 @@ var grabbingController
 var lastDeviceQuaternion
 var lastDevicePosition
 
+// Helper Functions
+var scaledVector3 = (x, y, z) => {
+    return new BABYLON.Vector3(x * GRID_TO_UNITS, y * GRID_TO_UNITS, z * GRID_TO_UNITS)
+}
+
 var createScene = () => {
     // Scene and camera
     var scene = new BABYLON.Scene(engine)
     var camera = new BABYLON.UniversalCamera('Camera',
-        new BABYLON.Vector3(1 * GRID_TO_UNITS, 1.5, 0),
+        scaledVector3(1, 6, 0),
         scene
     )
-    camera.setTarget(new BABYLON.Vector3(10 * GRID_TO_UNITS, 1.5, 0))
+    camera.setTarget(scaledVector3(10, 4.5, 0))
     camera.speed = 0.33
     camera.attachControl(canvas, true)
 
@@ -81,12 +86,20 @@ var createScene = () => {
     light.intensity = 0.2
 
     var floor = BABYLON.MeshBuilder.CreateGround('Floor', {
-        width:80,
-        height:50,
-        subdivisions: 5 
+        width:600,
+        height:600,
+        subdivisions: 6
     }, scene)
     floor.position.y = -0.01
     floor.material = materialFloor
+
+    var pathGround = BABYLON.MeshBuilder.CreateGround("Ground-Path", {
+        width: 600*GRID_TO_UNITS,
+        height: 8*GRID_TO_UNITS,
+        subdivisions: 4
+    }, scene);
+    pathGround.position.x = -300*GRID_TO_UNITS
+    pathGround.material = materialGround
 
     var outsideGround = BABYLON.MeshBuilder.CreateGround("Ground-Outside", {
         width: 11*GRID_TO_UNITS,
@@ -126,7 +139,7 @@ var createScene = () => {
             COLOR_GREY
         ]
     }, scene)
-    wall1.position = new BABYLON.Vector3(10 * GRID_TO_UNITS,4.5 * GRID_TO_UNITS,0)
+    wall1.position = scaledVector3(10, 4.5, 0)
     wall1.receiveShadows = true
 
     // Sky
@@ -232,6 +245,11 @@ var createScene = () => {
     pyramid.material = materialShape
     shapes.push(pyramid)
 
+    var person = BABYLON.MeshBuilder.CreateBox('Person', {
+        size: 0.5,
+        height: 1.5
+    }, scene)
+    person.position.y = 0.75
     // Shadows
     var shadowGenerator = new BABYLON.ShadowGenerator(2048, light);
     // shadowGenerator.usePoissonSampling = true
@@ -262,6 +280,49 @@ var createScene = () => {
         }
     })
 
+    // The pyramid
+    // var building = BABYLON.MeshBuilder.CreateBox('Building-Outside', {
+    //     size: 42 * GRID_TO_UNITS
+    // }, scene)
+    var building = BABYLON.MeshBuilder.CreateCylinder('Building-Outisde', {
+        height: 480 * GRID_TO_UNITS,
+        diameterTop: 0,
+        diameterBottom: 755 * GRID_TO_UNITS,
+        tessellation: 4
+    }, scene)
+    building.position.x = 271 * GRID_TO_UNITS
+    building.position.y = 240 * GRID_TO_UNITS
+    building.rotation.y = Math.PI * 0.25
+
+    var buildingCSG = BABYLON.CSG.FromMesh(building)
+
+    var roomStamp = BABYLON.MeshBuilder.CreateBox('Building-Inside', {
+        size: 1
+    }, scene)
+
+    // Start Room
+    roomStamp.scaling = scaledVector3(10, 15, 6)
+    roomStamp.position = scaledVector3(5,0,0)
+    buildingCSG.subtractInPlace(BABYLON.CSG.FromMesh(roomStamp))
+
+    // Middle Room
+    roomStamp.scaling = scaledVector3(16, 20, 14)
+    roomStamp.position = scaledVector3(18,0,0)
+    buildingCSG.subtractInPlace(BABYLON.CSG.FromMesh(roomStamp))
+
+    // Big Room
+    roomStamp.scaling = scaledVector3(24, 30, 24)
+    roomStamp.position = scaledVector3(38,0,0)
+    buildingCSG.subtractInPlace(BABYLON.CSG.FromMesh(roomStamp))
+
+
+
+    var mat = new BABYLON.StandardMaterial('std', scene);
+        mat.alpha = 0.7;
+
+    buildingCSG.toMesh('Building', mat, scene, false);
+    building.dispose()
+    roomStamp.dispose()
     return scene
 }
 

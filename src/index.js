@@ -284,18 +284,23 @@ var createScene = () => {
     var rooms = [
         { // Start room
             name: 'Start',
-            scaling: scaledVector3(10, 15, 6),
-            position: scaledVector3(5, 0, 0)
+            position: scaledVector3(5, 0, 0),
+            scaling: scaledVector3(10, 16, 10)
+        },
+        { // Corridor
+            name: 'Corridor',
+            position: scaledVector3(20, 0, 0),
+            scaling: scaledVector3(20, 12, 6)
         },
         { // Middle room
             name: 'Middle',
-            scaling: scaledVector3(16, 20, 14),
-            position: scaledVector3(38,0,0)
+            position: scaledVector3(40,0,0),
+            scaling: scaledVector3(20, 20, 20)
         },
         { // Big room
             name: 'Treasure',
-            scaling: scaledVector3(128, 100, 128),
-            position: scaledVector3(110,0,0)
+            position: scaledVector3(100,0,0),
+            scaling: scaledVector3(100, 100, 128)
         }
     ]
 
@@ -335,7 +340,6 @@ var vrHelper = scene.createDefaultVRExperience({
 
 // [outsideGround, insideGround, treasureGround]
 let floorMeshes = scene.meshes.filter(m => m.name.indexOf('Ground') !== -1)
-console.log("floorMeshes", floorMeshes)
 vrHelper.enableTeleportation({floorMeshes: floorMeshes});
 
 vrHelper.enableInteractions()

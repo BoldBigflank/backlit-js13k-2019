@@ -101,30 +101,6 @@ var createScene = () => {
     pathGround.position.x = -300*GRID_TO_UNITS
     pathGround.material = materialGround
 
-    var outsideGround = BABYLON.MeshBuilder.CreateGround("Ground-Outside", {
-        width: 11*GRID_TO_UNITS,
-        height: 10*GRID_TO_UNITS,
-        subdivisions: 4
-    }, scene);
-    outsideGround.position.x = 5*GRID_TO_UNITS
-    outsideGround.material = materialGround
-
-    var insideGround = BABYLON.MeshBuilder.CreateGround("Ground-Inside", {
-        width: 16 * GRID_TO_UNITS,
-        height: 14 * GRID_TO_UNITS,
-        subdivisions: 4
-    }, scene);
-    insideGround.position.x = 18 * GRID_TO_UNITS
-    insideGround.material = materialGround
-
-    var treasureGround = BABYLON.MeshBuilder.CreateGround("Ground-Treasure", {
-        width: 24 * GRID_TO_UNITS,
-        height: 24 * GRID_TO_UNITS,
-        subdivisions: 4
-    }, scene);
-    treasureGround.position.x = 38 * GRID_TO_UNITS
-    treasureGround.material = materialGround
-
     // Wall
     var wall1 = BABYLON.MeshBuilder.CreateBox('wall1', {
         height: 9 * GRID_TO_UNITS,
@@ -145,6 +121,11 @@ var createScene = () => {
     // Sky
     var stars = BABYLON.Mesh.CreateSphere('stars', 100, 1000, scene)
     stars.material = materialSky
+
+    // Moon
+    var moon = BABYLON.Mesh.CreateSphere('moon', 100, 75, scene)
+    moon.position.x = -500
+    moon.position.y = 50
 
     // Shapes
     var prism = BABYLON.MeshBuilder.ExtrudeShape('Grabbable-Prism1', {
@@ -300,22 +281,40 @@ var createScene = () => {
         size: 1
     }, scene)
 
-    // Start Room
-    roomStamp.scaling = scaledVector3(10, 15, 6)
-    roomStamp.position = scaledVector3(5,0,0)
-    buildingCSG.subtractInPlace(BABYLON.CSG.FromMesh(roomStamp))
+    var rooms = [
+        { // Start room
+            name: 'Start',
+            scaling: scaledVector3(10, 15, 6),
+            position: scaledVector3(5, 0, 0)
+        },
+        { // Middle room
+            name: 'Middle',
+            scaling: scaledVector3(16, 20, 14),
+            position: scaledVector3(38,0,0)
+        },
+        { // Big room
+            name: 'Treasure',
+            scaling: scaledVector3(128, 100, 128),
+            position: scaledVector3(110,0,0)
+        }
+    ]
 
-    // Middle Room
-    roomStamp.scaling = scaledVector3(16, 20, 14)
-    roomStamp.position = scaledVector3(18,0,0)
-    buildingCSG.subtractInPlace(BABYLON.CSG.FromMesh(roomStamp))
+    var groundStamp = BABYLON.MeshBuilder.CreateGround("Ground-Stamp", {
+        size: 1,
+        subdivisions: 4
+    }, scene)
+    groundStamp.material = materialGround
 
-    // Big Room
-    roomStamp.scaling = scaledVector3(24, 30, 24)
-    roomStamp.position = scaledVector3(38,0,0)
-    buildingCSG.subtractInPlace(BABYLON.CSG.FromMesh(roomStamp))
-
-
+    rooms.forEach(room => {
+        // Cut out the room
+        roomStamp.scaling = room.scaling
+        roomStamp.position = room.position
+        buildingCSG.subtractInPlace(BABYLON.CSG.FromMesh(roomStamp))
+        // Give it a floor
+        let ground = groundStamp.clone('Ground-' + room.name)
+        ground.scaling = room.scaling
+        ground.position = room.position
+    })
 
     var mat = new BABYLON.StandardMaterial('std', scene);
         mat.alpha = 0.7;

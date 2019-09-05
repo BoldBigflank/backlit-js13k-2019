@@ -21,8 +21,55 @@ var lastDeviceQuaternion
 var lastDevicePosition
 
 // Helper Functions
-var scaledVector3 = (x, y, z) => {
-    return new BABYLON.Vector3(x * GRID_TO_UNITS, y * GRID_TO_UNITS, z * GRID_TO_UNITS)
+var scaledVector3 = (x, y, z, scale) => {
+    scale = scale || GRID_TO_UNITS
+    return new BABYLON.Vector3(x * scale, y * scale, z * scale)
+}
+
+var createPuzzleShape = (puzzle, axis, scene) => {
+    axis = axis || 'y'
+    let meshes = []
+    // Assume a max grid size of 32x32
+    let path = [scaledVector3(0,0,0,32)]
+    pathX = (axis == 'x') ? 1 : 0
+    pathY = (axis == 'y') ? 1 : 0
+    pathZ = (axis == 'z') ? 1 : 0
+    path.push(scaledVector3(pathX, pathY, pathZ, 1))
+
+    puzzle.forEach((puzzleShape) => {
+        let shape = []
+        let mirrorShape = []
+        puzzleShape.push(puzzleShape[0]) // Add the first to the end
+        puzzleShape.forEach((point) => {
+            let coords = point.split(',')
+            let x = coords[0]
+            let y = coords[1]
+            let z = 0
+            shape.push(scaledVector3(x, y, z, 1/32))
+            mirrorShape.unshift(scaledVector3(32-x, y, z, 1/32))
+        })
+        var extrusion = BABYLON.MeshBuilder.ExtrudeShape("star", {
+            shape: shape, 
+            path: path, 
+            cap: BABYLON.Mesh.CAP_ALL, 
+            updatable: true
+        }, scene);
+        meshes.push(extrusion)
+
+        var extrusion = BABYLON.MeshBuilder.ExtrudeShape("star", {
+            shape: mirrorShape, 
+            path: path, 
+            cap: BABYLON.Mesh.CAP_ALL, 
+            updatable: true
+        }, scene);
+        meshes.push(extrusion)
+        // Mirror it
+
+    })
+    // Merge the meshes
+    var newMesh = BABYLON.Mesh.MergeMeshes(meshes, true);
+    // newMesh.scaling = 32
+    return newMesh
 }
 
 var createScene = () => {
@@ -128,6 +175,97 @@ var createScene = () => {
     moon.position.y = 50
 
     // Shapes
+    //Array of paths to construct extrusion
+    var scarabShape = [
+        [ // arm
+            '9,19',
+            '10,17',
+            '11,19',
+            '12,22',
+            '11,23'
+        ],
+        [ // head
+            '16,21',
+            '14,21',
+            '12,20',
+            '13,19',
+            '16,19'
+        ],
+        [ // leg
+            '10,0',
+            '11,1',
+            '10,4',
+            '10,6',
+            '8,4'
+        ],
+        [ // butt
+            '10,8',
+            '12,4',
+            '15,2',
+            '15,13',
+            '12,13',
+            '11,14'
+        ],
+        [ // mid
+            '16,18',
+            '12,18',
+            '11,16',
+            '12,14',
+            '16,14'
+        ],
+        [ // wing
+            '7,21',
+            '9,27',
+            '13,31',
+            '12,32',
+            '6,30',
+            '2,26',
+            '0,21',
+        ],[
+            '7,21',
+            '0,21',
+            '0,16',
+            '3,9',
+            '6,6',
+            '9,6',
+            '10,14'
+        ],
+        [ // moon
+            '16,31',
+            '13,30',
+            '12,27',
+            '13,24',
+            '16,23'
+        ]
+    ]
+    createPuzzleShape(scarabShape, 'y', scene)
+
+        // var myShape = [
+        //         new BABYLON.Vector3(0, 5, 0),
+        //         new BABYLON.Vector3(1, 1, 0),
+        //         new BABYLON.Vector3(5, 0, 0),
+        //         new BABYLON.Vector3(1, -1, 0),
+        //         new BABYLON.Vector3(0, -5, 0),
+        //         new BABYLON.Vector3(-1, -1, 0),
+        //         new BABYLON.Vector3(-5, 0, 0),
+        //         new BABYLON.Vector3(-1, 1, 0)
+        // ];
+        
+        // myShape.push(myShape[0]);
+        
+        // var myPath = [
+        //         new BABYLON.Vector3(0, 0, 0),
+        //         new BABYLON.Vector3(0, 0, 2),
+        //         new BABYLON.Vector3(0, 0, 4),
+        //         new BABYLON.Vector3(0, 0, 6),
+        //         new BABYLON.Vector3(0, 0, 8),
+        //         new BABYLON.Vector3(0, 0, 10)
+        // ];
+        
+        // //Create extrusion with updatable parameter set to true for later changes
+        // var extrusion = BABYLON.MeshBuilder.ExtrudeShape("star", {shape: myShape, path: myPath, sideOrientation: BABYLON.Mesh.DOUBLESIDE, updatable: true}, scene);
+                
+
     var prism = BABYLON.MeshBuilder.ExtrudeShape('Grabbable-Prism1', {
         shape: [   
             new BABYLON.Vector3(-2, -0.6, 0),
@@ -226,11 +364,12 @@ var createScene = () => {
     pyramid.material = materialShape
     shapes.push(pyramid)
 
-    var person = BABYLON.MeshBuilder.CreateBox('Person', {
-        size: 0.5,
-        height: 1.5
-    }, scene)
-    person.position.y = 0.75
+    // var person = BABYLON.MeshBuilder.CreateBox('Person', {
+    //     size: 0.5,
+    //     height: 1.5
+    // }, scene)
+    // person.position.y = 0.75
+
     // Shadows
     var shadowGenerator = new BABYLON.ShadowGenerator(2048, light);
     // shadowGenerator.usePoissonSampling = true

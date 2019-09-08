@@ -28,13 +28,15 @@ var scaledVector3 = (x, y, z, scale) => {
 
 var createPuzzleShape = (puzzle, axis, scene) => {
     axis = axis || 'y'
+    const shapeShift = scaledVector3(1, 1, 0, 1/32)
     let meshes = []
     // Assume a max grid size of 32x32
-    let path = [scaledVector3(0,0,0,32)]
+    let path = []
     pathX = (axis == 'x') ? 1 : 0
     pathY = (axis == 'y') ? 1 : 0
     pathZ = (axis == 'z') ? 1 : 0
-    path.push(scaledVector3(pathX, pathY, pathZ, 1))
+    path.push(scaledVector3(-pathX, -pathY, -pathZ, 1/2))
+    path.push(scaledVector3(pathX, pathY, pathZ, 1/2))
 
     puzzle.forEach((puzzleShape) => {
         let shape = []
@@ -45,8 +47,8 @@ var createPuzzleShape = (puzzle, axis, scene) => {
             let x = coords[0]
             let y = coords[1]
             let z = 0
-            shape.push(scaledVector3(x, y, z, 1/32))
-            mirrorShape.unshift(scaledVector3(32-x, y, z, 1/32))
+            shape.push(scaledVector3(x-16, y-16, z, 1/32))
+            mirrorShape.unshift(scaledVector3(32-x-16, y-16, z, 1/32))
         })
         var extrusion = BABYLON.MeshBuilder.ExtrudeShape("star", {
             shape: shape, 
@@ -75,10 +77,22 @@ var createPuzzleShape = (puzzle, axis, scene) => {
 var createScene = () => {
     // Scene and camera
     var scene = new BABYLON.Scene(engine)
+    scene.collisionsEnabled = true
     var camera = new BABYLON.UniversalCamera('Camera',
-        scaledVector3(1, 6, 0),
+        scaledVector3(-10, 5, 0),
         scene
     )
+
+    camera.keysUp = [87]
+    camera.keysLeft = [65]
+    camera.keysDown = [83]
+    camera.keysRight = [68]
+    camera.minZ = 0.1
+
+    camera.applyGravity = true
+    camera.checkCollisions = true
+    camera.ellipsoid = new BABYLON.Vector3(0.5, 0.75, 0.5)
+
     camera.setTarget(scaledVector3(10, 4.5, 0))
     camera.speed = 0.33
     camera.attachControl(canvas, true)
@@ -123,7 +137,15 @@ var createScene = () => {
     ctx.fillRect(0,0, 512, 512);
     textureShape.update()
     
-
+    // Solution shape
+    var textureSolution = new BABYLON.DynamicTexture("SolutionTexture", {width:512, height:512}, scene);
+    var ctx = textureSolution.getContext();
+    var materialSolution = new BABYLON.StandardMaterial("SolutionMaterial", scene);
+    materialSolution.diffuseTexture = textureSolution;
+    ctx.fillStyle = '#be6f54';
+    ctx.fillRect(0,0, 512, 512);
+    textureSolution.update()
+    
 
     // Lights
     var light1 = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(-1, 1, 0.01), scene)
@@ -139,6 +161,7 @@ var createScene = () => {
     }, scene)
     floor.position.y = -0.01
     floor.material = materialFloor
+    floor.checkCollisions = true
 
     var pathGround = BABYLON.MeshBuilder.CreateGround("Ground-Path", {
         width: 600*GRID_TO_UNITS,
@@ -238,7 +261,8 @@ var createScene = () => {
             '16,23'
         ]
     ]
-    createPuzzleShape(scarabShape, 'y', scene)
+    var scarab = createPuzzleShape(scarabShape, 'y', scene)
+    scarab.name = "Grabbable-Scarab"
 
     var ankhShape = [
         [
@@ -277,142 +301,62 @@ var createScene = () => {
             '16,0'
         ]
     ]
-    createPuzzleShape(ankhShape, 'x', scene)
-        // var myShape = [
-        //         new BABYLON.Vector3(0, 5, 0),
-        //         new BABYLON.Vector3(1, 1, 0),
-        //         new BABYLON.Vector3(5, 0, 0),
-        //         new BABYLON.Vector3(1, -1, 0),
-        //         new BABYLON.Vector3(0, -5, 0),
-        //         new BABYLON.Vector3(-1, -1, 0),
-        //         new BABYLON.Vector3(-5, 0, 0),
-        //         new BABYLON.Vector3(-1, 1, 0)
-        // ];
-        
-        // myShape.push(myShape[0]);
-        
-        // var myPath = [
-        //         new BABYLON.Vector3(0, 0, 0),
-        //         new BABYLON.Vector3(0, 0, 2),
-        //         new BABYLON.Vector3(0, 0, 4),
-        //         new BABYLON.Vector3(0, 0, 6),
-        //         new BABYLON.Vector3(0, 0, 8),
-        //         new BABYLON.Vector3(0, 0, 10)
-        // ];
-        
-        // //Create extrusion with updatable parameter set to true for later changes
-        // var extrusion = BABYLON.MeshBuilder.ExtrudeShape("star", {shape: myShape, path: myPath, sideOrientation: BABYLON.Mesh.DOUBLESIDE, updatable: true}, scene);
-                
+    var ankh = createPuzzleShape(ankhShape, 'x', scene)
+    ankh.name = "Solution-Ankh"
+    ankh.material = materialSolution
 
-    var prism = BABYLON.MeshBuilder.ExtrudeShape('Grabbable-Prism1', {
-        shape: [   
-            new BABYLON.Vector3(-2, -0.6, 0),
-            new BABYLON.Vector3(2,  -0.6, 0),
-            new BABYLON.Vector3(0,   1.4, 0),
-            new BABYLON.Vector3(-2, -0.6, 0)
-        ],
-        path: [
-            new BABYLON.Vector3(0,  0, -0.5),
-            new BABYLON.Vector3(0,  0, 0.5)
-        ],
-        cap: BABYLON.Mesh.CAP_ALL
-    }, scene)
-    prism.scaling = SHAPE_SCALE_V3
-    prism.position = new BABYLON.Vector3(5 * GRID_TO_UNITS, 1.5, 0)
-    prism.material = materialShape
-    shapes.push(prism)
+    var ankhCSG = BABYLON.CSG.FromMesh(ankh)
+    var scarabCSG = BABYLON.CSG.FromMesh(scarab)
 
-    var prism3 = prism.clone("Grabbable-Prism3")
-    prism3.position = new BABYLON.Vector3(5 * GRID_TO_UNITS, 1.0, -0.5)
-    prism3.scaling = new BABYLON.Vector3(0.5 * SHAPE_SCALE, 0.5 * SHAPE_SCALE, 2 * SHAPE_SCALE)
-    shapes.push(prism3)
-
-    var prism4 = prism3.clone("Grabbable-Prism4")
-    prism4.position = new BABYLON.Vector3(5 * GRID_TO_UNITS, 2, 0)
-    prism4.scaling = new BABYLON.Vector3(0.5 * SHAPE_SCALE, 0.5 * SHAPE_SCALE, 0.5 * SHAPE_SCALE)
-    shapes.push(prism4)
-
-    var prism2 = BABYLON.MeshBuilder.CreateLathe('Grabbable-Prism2', {
-        shape: [   
-            new BABYLON.Vector3(0, -0.6, 0),
-            new BABYLON.Vector3(2,  -0.6, 0),
-            new BABYLON.Vector3(0,   1.4, 0),
-            new BABYLON.Vector3(0, -0.6, 0)
-        ],
-        tessellation: 32,
-        arc: 0.5
-    }, scene)
-    prism2.scaling = SHAPE_SCALE_V3
-    prism2.position = new BABYLON.Vector3(5 * GRID_TO_UNITS, 1.5, 0.5)
-    prism2.material = materialShape
-    shapes.push(prism2)
-
-    var cylinder = BABYLON.MeshBuilder.CreateCylinder(
-        "Grabbable-Cylinder",
-        {
-            height: SQRT_2,
-            diameter: SQRT_2,
-            updatable: true
-        },
-        scene
-    )
-    var positions = cylinder.getVerticesData(BABYLON.VertexBuffer.PositionKind)
-    var normals = cylinder.getVerticesData(BABYLON.VertexBuffer.NormalKind)
-    var indices = cylinder.getIndices()
-    // Skew the cylinder
-    for (let i = 0; i < positions.length; i=i+3) {
-        let y = positions[i+1]
-        positions[i] += (y > 0) ? SQRT_2 / 2 : SQRT_2 / -2
-    }
-    BABYLON.VertexData.ComputeNormals(positions, indices, normals)
-    cylinder.updateVerticesData(BABYLON.VertexBuffer.PositionKind, positions)
-    cylinder.scaling = SHAPE_SCALE_V3
-    cylinder.position = new BABYLON.Vector3(5 * GRID_TO_UNITS, 1.5, -0.5)
-    cylinder.material = materialShape
-    shapes.push(cylinder)
-
-    var donut = BABYLON.MeshBuilder.CreateLathe('Grabbable-Donut', {
-        shape: [   
-            new BABYLON.Vector3(SQRT_2/4,SQRT_2/2, 0),
-            new BABYLON.Vector3(SQRT_2/4,  -SQRT_2/2, 0),
-            new BABYLON.Vector3(SQRT_2/2,   -SQRT_2/2, 0),
-            new BABYLON.Vector3(SQRT_2/2, SQRT_2/2, 0),
-            new BABYLON.Vector3(SQRT_2/4,SQRT_2/2, 0)
-        ],
-        tessellation: 32,
-        
-        closed: true
-    }, scene)
-    donut.scaling = SHAPE_SCALE_V3
-    donut.position = new BABYLON.Vector3(5 * GRID_TO_UNITS, 1.0, 0.5)
-    donut.material = materialShape
-    shapes.push(donut)
-
-    var pyramid = BABYLON.MeshBuilder.CreateLathe('Grabbable-Pyramid', {
-        shape: [   
-            new BABYLON.Vector3(0,-0.3 * SQRT_2, 0),
-            new BABYLON.Vector3(SQRT_2,-0.3 * SQRT_2, 0),
-            new BABYLON.Vector3(0, 0.7 * SQRT_2, 0)
-        ],
-        tessellation: 4,
-        closed: true
-    }, scene)
-    pyramid.scaling = SHAPE_SCALE_V3
-    pyramid.position = new BABYLON.Vector3(5 * GRID_TO_UNITS, 1.0, 0)
-    pyramid.material = materialShape
-    shapes.push(pyramid)
-
-    // var person = BABYLON.MeshBuilder.CreateBox('Person', {
-    //     size: 0.5,
-    //     height: 1.5
+    ankhCSG.intersectInPlace(scarabCSG)
+    var ankhScarabMesh = ankhCSG.toMesh('Grabbable-Ankh-Scarab', materialShape, scene, false)
+    ankhScarabMesh.position.y = 1
+    // Form it into 3 parts
+    
+    // shapes.push(ankh)
+    // var topStamp = BABYLON.MeshBuilder.CreateSphere('Ankh-Top-Stamp', {
+    //     diameter: 1
     // }, scene)
-    // person.position.y = 0.75
+    // var topStamp = BABYLON.MeshBuilder.CreateBox('Ankh-Top-Stamp', {
+    //     size: 1
+    // }, scene)
+    
+    // topStamp.scaling = scaledVector3(18, 14, 14, 1/32)
+    // topStamp.position.y = 9 / 32
+    // var ankhTopCSG = ankhCSG.intersect(BABYLON.CSG.FromMesh(topStamp))
+    // var ankhTop = ankhTopCSG.toMesh('Grabbable-Ankh-Top', materialShape, scene, true)
+    // ankhTop.position.y = 2
+    // // TODO: Set the ankhTop pivot point to 9/32
+    // shapes.push(ankhTop)
+
+    // topStamp.position.y = 0
+    // topStamp.scaling = scaledVector3(28, 8, 28, 1/32)
+    // var ankhMiddleCSG = ankhCSG.intersect(BABYLON.CSG.FromMesh(topStamp))
+    // var ankhMiddle = ankhMiddleCSG.toMesh('Grabbable-Ankh-Middle', materialShape, scene, true)
+    // ankhMiddle.position.y = 1.5
+    // shapes.push(ankhMiddle)
+
+    // topStamp.position.y = -8.5 / 32
+    // topStamp.scaling = scaledVector3(1, 15, 10, 1/32)
+    // var ankhBottomCSG = ankhCSG.intersect(BABYLON.CSG.FromMesh(topStamp))
+    // var ankhBottom = ankhBottomCSG.toMesh('Grabbable-Ankh-Bottom', materialShape, scene, true)
+    // ankhBottom.position.y = 1.0
+    // shapes.push(ankhBottom)
+
+    // topStamp.dispose()
+
+    // Place the ankh solution
+    ankh.position = scaledVector3(9,4,0)
+    ankh.scaling.x = 0.01
+    ankh.receiveShadows = true
 
     // Shadows
     var shadowGenerator = new BABYLON.ShadowGenerator(2048, light);
     // shadowGenerator.usePoissonSampling = true
     shadowGenerator.getShadowMap().renderList = shapes
     
+
+    // Used for grabbing and rotating shapes
     scene.onBeforeRenderObservable.add(() => {
         // Update the grabbed object
         if (grabbedMesh && grabbingController) {
@@ -423,7 +367,6 @@ var createScene = () => {
                 var differenceQuat = currentDeviceQuaternion.multiply( BABYLON.Quaternion.Inverse(lastDeviceQuaternion) )
                 // Add the difference to the grabbedMesh
                 grabbedMesh.rotationQuaternion = differenceQuat.multiply( grabbedMesh.rotationQuaternion.clone() )
-                grabbedMesh.rotationQuaternion = differenceQuat.multiply( grabbedMesh.rotationQuaternion.clone() )
             }
             lastDeviceQuaternion = currentDeviceQuaternion
             // Position on the XZ plane
@@ -432,6 +375,8 @@ var createScene = () => {
                 var differencePos = currentDevicePosition.subtract(lastDevicePosition)
                 differencePos.x = 0 // Don't move in the X direction
                 grabbedMesh.position.addInPlace(differencePos)
+                grabbedMesh.position.addInPlace(differencePos)
+                grabbedMesh.position.addInPlace(differencePos)
             }
             lastDevicePosition = currentDevicePosition
 
@@ -439,9 +384,6 @@ var createScene = () => {
     })
 
     // The pyramid
-    // var building = BABYLON.MeshBuilder.CreateBox('Building-Outside', {
-    //     size: 42 * GRID_TO_UNITS
-    // }, scene)
     var building = BABYLON.MeshBuilder.CreateCylinder('Building-Outisde', {
         height: 480 * GRID_TO_UNITS,
         diameterTop: 0,
@@ -467,7 +409,7 @@ var createScene = () => {
         { // Corridor
             name: 'Corridor',
             position: scaledVector3(20, 0, 0),
-            scaling: scaledVector3(20, 12, 6)
+            scaling: scaledVector3(20, 16, 6)
         },
         { // Middle room
             name: 'Middle',
@@ -501,9 +443,10 @@ var createScene = () => {
     var mat = new BABYLON.StandardMaterial('std', scene);
         mat.alpha = 0.7;
 
-    buildingCSG.toMesh('Building', mat, scene, false);
+    var FullBuilding = buildingCSG.toMesh('Building', mat, scene, false);
     building.dispose()
     roomStamp.dispose()
+    FullBuilding.checkCollisions = true
     return scene
 }
 

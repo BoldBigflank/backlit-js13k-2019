@@ -20,13 +20,319 @@ var grabbingController
 var lastDeviceQuaternion
 var lastDevicePosition
 
+var eyeShape = {
+    shouldMirror: false,
+    points: [
+        [
+            '0, 27',
+            '0, 24',
+            '20, 30',
+            '19, 32',
+        ],[
+            '19, 32',
+            '20, 30',
+            '25, 30',
+            '25, 32'
+        ],[
+            '25, 32',
+            '25, 30', 
+            '32, 28',
+            '32, 30'
+        ],[
+            '0, 20',
+            '0, 19',
+            '1, 18',
+            '6, 18',
+            '6, 20',
+            '2, 21',
+            '1, 21'
+        ],[
+            '2, 21',
+            '6, 20',
+            '14, 23',
+            '14, 25'
+        ],[
+            '14, 25',
+            '14, 23',
+            '18, 23',
+            '18, 25'
+        ],[
+            '18, 25',
+            '18, 23',
+            '27, 21',
+            '32, 22'
+        ],[
+            '32, 22',
+            '27, 21',
+            '27, 20',
+            '32, 19'
+        ],[
+            '32, 19',
+            '27, 20',
+            '17, 17',
+            '18, 15'
+        ],[
+            '9, 17',
+            '7, 15',
+            '18, 15',
+            '17, 17'
+        ],[
+            '9, 17',
+            '6, 18',
+            '2, 18',
+            '7, 15'
+        ],[ // eye
+            '9, 21',
+            '9, 20',
+            '11, 18',
+            '14, 18',
+            '16, 20',
+            '16, 22',
+            '15, 23',
+            '14, 23'
+        ],[
+            '7, 15',
+            '3, 7',
+            '4, 6',
+            '6, 6',
+            '9, 13'
+        ],[ // tail
+            '10, 15',
+            '7, 15',
+            '19, 3',
+            '20, 5'
+        ],[
+            '20, 5',
+            '19, 3',
+            '24, 0',
+            '25, 2'
+        ],[
+            '25, 2',
+            '24, 0',
+            '29, 0',
+            '28, 2'
+        ],[
+            '28, 2',
+            '29, 0',
+            '32, 3',
+            '30, 4'
+        ],[
+            '30, 4',
+            '32, 3',
+            '32, 6',
+            '30, 5'
+        ],[
+            '30, 5',
+            '32, 6',
+            '30, 8',
+            '29, 6'
+        ],[
+            '29, 6',
+            '30, 8',
+            '27, 8',
+            '28, 6'
+        ],[
+            '28, 6',
+            '27, 8',
+            '26, 7',
+            '26, 5',
+            '27, 4',
+            '28, 4'
+        ]
+    ],
+    hitPoints: [
+        '2,26',
+        '12,29',
+        '29,30',
+        '3,19',
+        '12,20',
+        '30,20',
+        '5,8',
+        '12,12',
+        '18,6',
+        '23,2',
+        '27,6',
+    ],
+    missPoints: [
+        '3,29',
+        '14,26',
+        '8,19',
+        '20,20',
+        '29,24',
+        '4,14',
+        '10,10',
+        '16,13',
+        '24,5',
+        '28,10'
+    ]
+}
+
+var scarabShape = {
+    shouldMirror: true,
+    points: [
+        [ // arm
+            '9,19',
+            '10,17',
+            '11,19',
+            '12,22',
+            '11,23'
+        ],
+        [ // head
+            '16,21',
+            '14,21',
+            '12,20',
+            '13,19',
+            '16,19'
+        ],
+        [ // leg
+            '10,0',
+            '11,1',
+            '10,4',
+            '10,6',
+            '8,4'
+        ],
+        [ // butt
+            '10,8',
+            '12,4',
+            '15,2',
+            '15,13',
+            '12,13',
+            '11,14'
+        ],
+        [ // mid
+            '16,18',
+            '12,18',
+            '11,16',
+            '12,14',
+            '16,14'
+        ],
+        [ // wing
+            '7,21',
+            '9,27',
+            '13,31',
+            '12,32',
+            '6,30',
+            '2,26',
+            '0,21',
+        ],[
+            '7,21',
+            '0,21',
+            '0,16',
+            '3,9',
+            '6,6',
+            '9,6',
+            '10,14'
+        ],
+        [ // moon
+            '16,31',
+            '13,30',
+            '12,27',
+            '13,24',
+            '16,23'
+        ]
+    ]
+}
+
+var ankhShape = {
+    shouldMirror: true,
+    points: [
+        [
+            '16,32',
+            '12,31',
+            '10,27',
+            '13,26',
+            '16,28'
+        ],[
+            '10,27',
+            '10,24',
+            '13,25',
+            '13,26'
+        ],[
+            '10,24',
+            '14,19',
+            '16,19',
+            '16,20',
+            '13,25'
+        ],[
+            '16,19',
+            '14,19',
+            '14,18',
+            '16,18'
+        ],[
+            '16,18',
+            '14,18',
+            '8,19',
+            '8,14',
+            '14,15',
+            '16,15'
+        ],[
+            '16,15',
+            '14,15',
+            '12,0',
+            '16,0'
+        ],[ // moon
+            '6, 30',
+            '4, 30',
+            '2, 28',
+            '2, 26',
+            '4, 24',
+            '6, 24',
+            '8, 26',
+            '8, 28'
+        ],[ // pyramid
+            '5, 10',
+            '0, 5',
+            '10, 5'
+        ]
+    ],
+    hitPoints: [
+        '5,27',
+        '13,29',
+        '13,22',
+        '10,17',
+        '10,15',
+        '15,12',
+        '14,3',
+        '5,7'
+    ],
+    missPoints: [
+        '2,30',
+        '9,30',
+        '9,26',
+        '10,20',
+        '6,16',
+        '8,12',
+        '10,8',
+        '5,4'
+    ]
+}
+
+class GameManager {
+    constructor() {
+        this.state = 0
+    }
+    setPuzzle(position, direction, hitRays, missRays) {
+        this.position = position
+        this.direction = direction
+        this.hitRays = hitRays
+        this.missRays = missRays
+    }
+    checkSolution() {
+        // From the position, cast rays in the direction
+
+    }
+}
+const gameManager = new GameManager()
+
 // Helper Functions
 var scaledVector3 = (x, y, z, scale) => {
     scale = scale || GRID_TO_UNITS
     return new BABYLON.Vector3(x * scale, y * scale, z * scale)
 }
 
-var createPuzzleShape = (puzzle, axis, scene) => {
+var CreatePuzzleShape = (shapeObject, axis, scene) => {
+    let puzzle = shapeObject.points
+    let shouldMirror = shapeObject.shouldMirror
     axis = axis || 'y'
     const shapeShift = scaledVector3(1, 1, 0, 1/32)
     let meshes = []
@@ -48,7 +354,8 @@ var createPuzzleShape = (puzzle, axis, scene) => {
             let y = coords[1]
             let z = 0
             shape.push(scaledVector3(x-16, y-16, z, 1/32))
-            mirrorShape.unshift(scaledVector3(32-x-16, y-16, z, 1/32))
+            if (shouldMirror)
+                mirrorShape.unshift(scaledVector3(32-x-16, y-16, z, 1/32))
         })
         var extrusion = BABYLON.MeshBuilder.ExtrudeShape("star", {
             shape: shape, 
@@ -72,6 +379,54 @@ var createPuzzleShape = (puzzle, axis, scene) => {
     var newMesh = BABYLON.Mesh.MergeMeshes(meshes, true);
     // newMesh.scaling = 32
     return newMesh
+}
+
+var CreatePuzzle = function(shapeArrays, shapeMat, scene) {
+    var axes = ['x', 'y', 'z']
+    var shapeMeshes = []
+    var shapeCSGs = []
+    var resultMeshes = []
+    // Make a mesh from each of the shapeArrays
+    shapeArrays.forEach((shape, i) => {
+        var shapeMesh = CreatePuzzleShape(shape, axes[i],   )
+        shapeMeshes.push(shapeMesh)
+    })
+    // Make CSG from each
+    // Combine using intersect
+    let resultCSG = null
+    shapeMeshes.forEach((shapeMesh) => {
+        let shapeCSG = BABYLON.CSG.FromMesh(shapeMesh)
+        if (!resultCSG) resultCSG = shapeCSG
+        else {
+            resultCSG.intersectInPlace(shapeCSG)
+        }
+    })
+
+    // Use a box to split it into four chunks
+    var topStamp = BABYLON.MeshBuilder.CreateBox('Box-Stamp', {
+        size: 0.52
+    }, scene)
+    
+    var positions = [
+        {x: 0.25, y: 0.25, z: 0.25 },
+        {x: -0.25, y: 0.25, z: -0.25 },
+        {x: 0.25, y: -0.25, z: -0.25 },
+        {x: -0.25, y: -0.25, z: 0.25 }
+    ]
+    positions.forEach((boxPosition, i) => {
+        let pivotPoint = scaledVector3(boxPosition.x, boxPosition.y, boxPosition.z, 1)
+        topStamp.position = pivotPoint
+        var shapeCSG = resultCSG.intersect(BABYLON.CSG.FromMesh(topStamp))
+        let shapeMesh = shapeCSG.toMesh('Grabbable-Puzzle-' + i, shapeMat, scene, true)
+        // Move the pivot to teh right spot
+        shapeMesh.setPivotPoint(pivotPoint)
+        resultMeshes.push(shapeMesh)
+    })
+    topStamp.dispose()
+    shapeMeshes.forEach((mesh) => mesh.dispose())
+    // Every puzzle will do the same four blocks
+    // return an array of meshes with their pivot point set
+    return resultMeshes
 }
 
 var createScene = () => {
@@ -198,157 +553,12 @@ var createScene = () => {
     moon.position.y = 50
 
     // Shapes
-    //Array of paths to construct extrusion
-    var scarabShape = [
-        [ // arm
-            '9,19',
-            '10,17',
-            '11,19',
-            '12,22',
-            '11,23'
-        ],
-        [ // head
-            '16,21',
-            '14,21',
-            '12,20',
-            '13,19',
-            '16,19'
-        ],
-        [ // leg
-            '10,0',
-            '11,1',
-            '10,4',
-            '10,6',
-            '8,4'
-        ],
-        [ // butt
-            '10,8',
-            '12,4',
-            '15,2',
-            '15,13',
-            '12,13',
-            '11,14'
-        ],
-        [ // mid
-            '16,18',
-            '12,18',
-            '11,16',
-            '12,14',
-            '16,14'
-        ],
-        [ // wing
-            '7,21',
-            '9,27',
-            '13,31',
-            '12,32',
-            '6,30',
-            '2,26',
-            '0,21',
-        ],[
-            '7,21',
-            '0,21',
-            '0,16',
-            '3,9',
-            '6,6',
-            '9,6',
-            '10,14'
-        ],
-        [ // moon
-            '16,31',
-            '13,30',
-            '12,27',
-            '13,24',
-            '16,23'
-        ]
-    ]
-    var scarab = createPuzzleShape(scarabShape, 'y', scene)
-    scarab.name = "Grabbable-Scarab"
-
-    var ankhShape = [
-        [
-            '16,32',
-            '12,31',
-            '10,27',
-            '13,26',
-            '16,28'
-        ],[
-            '10,27',
-            '10,24',
-            '13,25',
-            '13,26'
-        ],[
-            '10,24',
-            '14,19',
-            '16,19',
-            '16,20',
-            '13,25'
-        ],[
-            '16,19',
-            '14,19',
-            '14,18',
-            '16,18'
-        ],[
-            '16,18',
-            '14,18',
-            '8,19',
-            '8,14',
-            '14,15',
-            '16,15'
-        ],[
-            '16,15',
-            '14,15',
-            '12,0',
-            '16,0'
-        ]
-    ]
-    var ankh = createPuzzleShape(ankhShape, 'x', scene)
-    ankh.name = "Solution-Ankh"
-    ankh.material = materialSolution
-
-    var ankhCSG = BABYLON.CSG.FromMesh(ankh)
-    var scarabCSG = BABYLON.CSG.FromMesh(scarab)
-
-    ankhCSG.intersectInPlace(scarabCSG)
-    var ankhScarabMesh = ankhCSG.toMesh('Grabbable-Ankh-Scarab', materialShape, scene, false)
-    ankhScarabMesh.position.y = 1
-    // Form it into 3 parts
-    
-    // shapes.push(ankh)
-    // var topStamp = BABYLON.MeshBuilder.CreateSphere('Ankh-Top-Stamp', {
-    //     diameter: 1
-    // }, scene)
-    // var topStamp = BABYLON.MeshBuilder.CreateBox('Ankh-Top-Stamp', {
-    //     size: 1
-    // }, scene)
-    
-    // topStamp.scaling = scaledVector3(18, 14, 14, 1/32)
-    // topStamp.position.y = 9 / 32
-    // var ankhTopCSG = ankhCSG.intersect(BABYLON.CSG.FromMesh(topStamp))
-    // var ankhTop = ankhTopCSG.toMesh('Grabbable-Ankh-Top', materialShape, scene, true)
-    // ankhTop.position.y = 2
-    // // TODO: Set the ankhTop pivot point to 9/32
-    // shapes.push(ankhTop)
-
-    // topStamp.position.y = 0
-    // topStamp.scaling = scaledVector3(28, 8, 28, 1/32)
-    // var ankhMiddleCSG = ankhCSG.intersect(BABYLON.CSG.FromMesh(topStamp))
-    // var ankhMiddle = ankhMiddleCSG.toMesh('Grabbable-Ankh-Middle', materialShape, scene, true)
-    // ankhMiddle.position.y = 1.5
-    // shapes.push(ankhMiddle)
-
-    // topStamp.position.y = -8.5 / 32
-    // topStamp.scaling = scaledVector3(1, 15, 10, 1/32)
-    // var ankhBottomCSG = ankhCSG.intersect(BABYLON.CSG.FromMesh(topStamp))
-    // var ankhBottom = ankhBottomCSG.toMesh('Grabbable-Ankh-Bottom', materialShape, scene, true)
-    // ankhBottom.position.y = 1.0
-    // shapes.push(ankhBottom)
-
-    // topStamp.dispose()
-
-    // Place the ankh solution
-    ankh.position = scaledVector3(9,4,0)
-    ankh.scaling.x = 0.01
-    ankh.receiveShadows = true
+    var ankhShapeMeshes = CreatePuzzle([ankhShape, eyeShape], materialShape, scene)
+    ankhShapeMeshes.forEach(shapeMesh => {
+        shapeMesh.position.y += 1.5
+        shapeMesh.position.x = 1
+        shapes.push(shapeMesh)
+    })
 
     // Shadows
     var shadowGenerator = new BABYLON.ShadowGenerator(2048, light);
@@ -458,7 +668,6 @@ var vrHelper = scene.createDefaultVRExperience({
     createDeviceOrientationCamera: false
 });
 
-// [outsideGround, insideGround, treasureGround]
 let floorMeshes = scene.meshes.filter(m => m.name.indexOf('Ground') !== -1)
 vrHelper.enableTeleportation({floorMeshes: floorMeshes});
 
@@ -499,7 +708,7 @@ vrHelper.onControllerMeshLoaded.add((webVRController)=>{
     webVRController.onTriggerStateChangedObservable.add(function(stateObject) {
         // if(webVRController.hand=="left")
         //grab
-        if(stateObject.value > 0.1){
+        if(stateObject.value > 0.1){ // Trigger started
             if (selectedMesh !== null) {
                 // Only grab grabbable
                 grabbedMesh = selectedMesh
@@ -509,11 +718,12 @@ vrHelper.onControllerMeshLoaded.add((webVRController)=>{
                 grabbingController = webVRController
             }
         //ungrab   
-        } else {
+        } else { // Trigger ended
             if (grabbedMesh) {
                 // webVRController.mesh.removeChild(grabbedMesh);
                 lastDeviceQuaternion = undefined
                 lastDevicePosition = undefined
+                gameManager.checkSolution()
             }
             grabbedMesh = null
         }

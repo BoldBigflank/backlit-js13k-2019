@@ -307,19 +307,72 @@ var ankhShape = {
     ]
 }
 
+var puzzles = [
+    {
+        shapes: [ankhShape, scarabShape],
+        position: '0,4,0',
+        solution: '9,0,0'
+    },
+    {
+        shapes: [scarabShape, eyeShape],
+        position: '40,0,0',
+        solution: '10,0,0'
+    },
+    // {
+    //     // The Ray puzzle
+    // },
+    {
+        shapes: [scarabShape, eyeShape],
+        type: 'double',
+        position: '40,0,0',
+        solution: ['-5,-5,0', '-5,5,0']
+    }
+]
+
 class GameManager {
     constructor() {
         this.state = 0
+        this.currentPuzzle = -1
+        this.scene = null
+        this.shapeMat = null
+        this.shadowGenerator = null
     }
-    setPuzzle(position, direction, hitRays, missRays) {
-        this.position = position
-        this.direction = direction
-        this.hitRays = hitRays
-        this.missRays = missRays
+    SetupNextPuzzle() {
+        if (!this.scene || !this.shapeMat) {
+            console.error('missing scene or shapeMat')
+            return
+        }
+        this.currentPuzzle++
+        var currentPuzzle = puzzles[this.currentPuzzle]
+        let pos = currentPuzzle.position.split(',')
+        let sol = currentPuzzle.solution.split(',')
+        let position = scaledVector3(pos[0], pos[1], pos[2])
+        let solution = scaledVector3(sol[0], sol[1], sol[2])
+
+        // Make the shapes
+        var puzzleShapes = CreatePuzzle(currentPuzzle.shapes, this.shapeMat, this.scene)
+        puzzleShapes.forEach((shape) => {
+            shape.position = position
+            // TODO: Shuffle the position/rotation of these
+            shape.rotationQuaternion = BABYLON.Quaternion.FromEulerAngles(
+                Math.random() * 2 * Math.PI - Math.PI,
+                Math.random() * 2 * Math.PI - Math.PI,
+                Math.random() * 2 * Math.PI - Math.PI
+            )
+            this.shadowGenerator.getShadowMap().renderList.push(shape)
+        })
+
+        // Make the solution template
+        var solutionShape = CreatePuzzleShape(currentPuzzle.shapes[0], 'z', this.scene)
+        solutionShape.position = position.add(solution)
+        solutionShape.material = CreateColorMaterial('#00ffff')
+        solutionShape.material.alpha = 0.3
+
+        solutionShape.scaling.z = 0.1
+        solutionShape.lookAt(position)
     }
     checkSolution() {
         // From the position, cast rays in the direction
-
     }
 }
 const gameManager = new GameManager()
@@ -381,8 +434,20 @@ var CreatePuzzleShape = (shapeObject, axis, scene) => {
     return newMesh
 }
 
+var CreateColorMaterial = (colorHex, scene) => {
+    // Make the shape material
+    var tex = new BABYLON.DynamicTexture("Texture-" + colorHex, {width:512, height:512}, scene);
+    var ctx = tex.getContext();
+    var mat = new BABYLON.StandardMaterial("Material-" + colorHex, scene);
+    mat.diffuseTexture = tex;
+    ctx.fillStyle = colorHex;
+    ctx.fillRect(0,0, 512, 512);
+    tex.update()
+    return mat
+}
+
 var CreatePuzzle = function(shapeArrays, shapeMat, scene) {
-    var axes = ['x', 'y', 'z']
+    var axes = ['x', 'z', 'y']
     var shapeMeshes = []
     var shapeCSGs = []
     var resultMeshes = []
@@ -416,7 +481,7 @@ var CreatePuzzle = function(shapeArrays, shapeMat, scene) {
     positions.forEach((boxPosition, i) => {
         let pivotPoint = scaledVector3(boxPosition.x, boxPosition.y, boxPosition.z, 1)
         topStamp.position = pivotPoint
-        var shapeCSG = resultCSG.intersect(BABYLON.CSG.FromMesh(topStamp))
+        let shapeCSG = resultCSG.intersect(BABYLON.CSG.FromMesh(topStamp))
         let shapeMesh = shapeCSG.toMesh('Grabbable-Puzzle-' + i, shapeMat, scene, true)
         // Move the pivot to teh right spot
         shapeMesh.setPivotPoint(pivotPoint)
@@ -484,31 +549,6 @@ var createScene = () => {
     ctx.fillRect(0,0, 512, 512);
     textureSky.update()
     
-    var textureShape = new BABYLON.DynamicTexture("ShapeTexture", {width:512, height:512}, scene);
-    var ctx = textureShape.getContext();
-    var materialShape = new BABYLON.StandardMaterial("ShapeMaterial", scene);
-    materialShape.diffuseTexture = textureShape;
-    ctx.fillStyle = '#3c7681';
-    ctx.fillRect(0,0, 512, 512);
-    textureShape.update()
-    
-    // Solution shape
-    var textureSolution = new BABYLON.DynamicTexture("SolutionTexture", {width:512, height:512}, scene);
-    var ctx = textureSolution.getContext();
-    var materialSolution = new BABYLON.StandardMaterial("SolutionMaterial", scene);
-    materialSolution.diffuseTexture = textureSolution;
-    ctx.fillStyle = '#be6f54';
-    ctx.fillRect(0,0, 512, 512);
-    textureSolution.update()
-    
-
-    // Lights
-    var light1 = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(-1, 1, 0.01), scene)
-    light1.intensity = 0.5 // 0.5
-    var light = new BABYLON.DirectionalLight('light2', new BABYLON.Vector3(1,0,0), scene)
-    light.position.x = -500
-    light.intensity = 0.2
-
     var floor = BABYLON.MeshBuilder.CreateGround('Floor', {
         width:600,
         height:600,
@@ -552,20 +592,6 @@ var createScene = () => {
     moon.position.x = -500
     moon.position.y = 50
 
-    // Shapes
-    var ankhShapeMeshes = CreatePuzzle([ankhShape, eyeShape], materialShape, scene)
-    ankhShapeMeshes.forEach(shapeMesh => {
-        shapeMesh.position.y += 1.5
-        shapeMesh.position.x = 1
-        shapes.push(shapeMesh)
-    })
-
-    // Shadows
-    var shadowGenerator = new BABYLON.ShadowGenerator(2048, light);
-    // shadowGenerator.usePoissonSampling = true
-    shadowGenerator.getShadowMap().renderList = shapes
-    
-
     // Used for grabbing and rotating shapes
     scene.onBeforeRenderObservable.add(() => {
         // Update the grabbed object
@@ -584,7 +610,7 @@ var createScene = () => {
             if (lastDevicePosition) {
                 var differencePos = currentDevicePosition.subtract(lastDevicePosition)
                 differencePos.x = 0 // Don't move in the X direction
-                grabbedMesh.position.addInPlace(differencePos)
+                // console.log("grabbedMesh", grabbedMesh)
                 grabbedMesh.position.addInPlace(differencePos)
                 grabbedMesh.position.addInPlace(differencePos)
             }
@@ -594,7 +620,7 @@ var createScene = () => {
     })
 
     // The pyramid
-    var building = BABYLON.MeshBuilder.CreateCylinder('Building-Outisde', {
+    var building = BABYLON.MeshBuilder.CreateCylinder('Building-Outside', {
         height: 480 * GRID_TO_UNITS,
         diameterTop: 0,
         diameterBottom: 755 * GRID_TO_UNITS,
@@ -661,6 +687,22 @@ var createScene = () => {
 }
 
 var scene = createScene()
+gameManager.scene = scene
+
+// Lights
+var light1 = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(-1, 1, 0.01), scene)
+light1.intensity = 0.5 // 0.5
+var light = new BABYLON.DirectionalLight('light2', new BABYLON.Vector3(1,0,0), scene)
+light.position.x = -500
+light.intensity = 0.2
+
+// Shadows
+var shadowGenerator = new BABYLON.ShadowGenerator(2048, light);
+gameManager.shadowGenerator = shadowGenerator
+
+gameManager.shapeMat = CreateColorMaterial('#3c7681', scene)
+
+gameManager.SetupNextPuzzle()
 
 
 // VR Stuff
@@ -711,6 +753,7 @@ vrHelper.onControllerMeshLoaded.add((webVRController)=>{
         if(stateObject.value > 0.1){ // Trigger started
             if (selectedMesh !== null) {
                 // Only grab grabbable
+                console.log("grabbedMesh", selectedMesh.name)
                 grabbedMesh = selectedMesh
                 if (!grabbedMesh.rotationQuaternion) {
                     grabbedMesh.rotationQuaternion = new BABYLON.Vector4(0,0,0,1)

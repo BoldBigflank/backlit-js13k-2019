@@ -14,6 +14,7 @@ const GRID_TO_UNITS = 1/3
 const SHAPE_SCALE = 0.1
 const SHAPE_SCALE_V3 = new BABYLON.Vector3(SHAPE_SCALE, SHAPE_SCALE, SHAPE_SCALE)
 var shapes = []
+var materials = []
 var selectedMesh
 var grabbedMesh
 var grabbingController
@@ -230,7 +231,9 @@ var scarabShape = {
             '13,24',
             '16,23'
         ]
-    ]
+    ],
+    hitPoints: [],
+    missPoints: []
 }
 
 var ankhShape = {
@@ -293,7 +296,15 @@ var ankhShape = {
         '10,15',
         '15,12',
         '14,3',
-        '5,7'
+        '5,7',
+        '27,27',
+        '19,29',
+        '19,22',
+        '22,17',
+        '22,15',
+        '17,12',
+        '18,3',
+        '27,7'
     ],
     missPoints: [
         '2,30',
@@ -303,7 +314,15 @@ var ankhShape = {
         '6,16',
         '8,12',
         '10,8',
-        '5,4'
+        '5,4',
+        '30,30',
+        '23,30',
+        '23,26',
+        '22,20',
+        '26,16',
+        '24,12',
+        '22,8',
+        '27,4'
     ]
 }
 
@@ -315,7 +334,7 @@ var puzzles = [
     },
     {
         shapes: [scarabShape, eyeShape],
-        position: '40,0,0',
+        position: '40,4,0',
         solution: '10,0,0'
     },
     // {
@@ -324,7 +343,7 @@ var puzzles = [
     {
         shapes: [scarabShape, eyeShape],
         type: 'double',
-        position: '40,0,0',
+        position: '40,4,0',
         solution: ['-5,-5,0', '-5,5,0']
     }
 ]
@@ -332,7 +351,7 @@ var puzzles = [
 class GameManager {
     constructor() {
         this.state = 0
-        this.currentPuzzle = -1
+        this.currentPuzzleIndex = -1
         this.scene = null
         this.shapeMat = null
         this.shadowGenerator = null
@@ -342,15 +361,15 @@ class GameManager {
             console.error('missing scene or shapeMat')
             return
         }
-        this.currentPuzzle++
-        var currentPuzzle = puzzles[this.currentPuzzle]
-        let pos = currentPuzzle.position.split(',')
-        let sol = currentPuzzle.solution.split(',')
+        this.currentPuzzleIndex++
+        this.currentPuzzle = puzzles[this.currentPuzzleIndex]
+        let pos = this.currentPuzzle.position.split(',')
+        let sol = this.currentPuzzle.solution.split(',')
         let position = scaledVector3(pos[0], pos[1], pos[2])
         let solution = scaledVector3(sol[0], sol[1], sol[2])
 
         // Make the shapes
-        var puzzleShapes = CreatePuzzle(currentPuzzle.shapes, this.shapeMat, this.scene)
+        var puzzleShapes = CreatePuzzle(this.currentPuzzle.shapes, this.shapeMat, this.scene)
         puzzleShapes.forEach((shape) => {
             shape.position = position
             // TODO: Shuffle the position/rotation of these
@@ -361,18 +380,54 @@ class GameManager {
             )
             this.shadowGenerator.getShadowMap().renderList.push(shape)
         })
+        this.puzzleShapes = puzzleShapes
 
         // Make the solution template
-        var solutionShape = CreatePuzzleShape(currentPuzzle.shapes[0], 'z', this.scene)
+        var solutionShape = CreatePuzzleShape(this.currentPuzzle.shapes[0], 'z', this.scene)
         solutionShape.position = position.add(solution)
         solutionShape.material = CreateColorMaterial('#00ffff')
         solutionShape.material.alpha = 0.3
 
         solutionShape.scaling.z = 0.1
         solutionShape.lookAt(position)
+        this.solutionShape = solutionShape
     }
     checkSolution() {
         // From the position, cast rays in the direction
+        let pos = this.currentPuzzle.position.split(',')
+        let sol = this.currentPuzzle.solution.split(',')
+        let direction = scaledVector3(sol[0], sol[1], sol[2])
+        direction = BABYLON.Vector3.Normalize(direction)
+        let origin = scaledVector3(pos[0], pos[1], pos[2]).subtract(direction)
+
+        var length = 2
+        let hitAll = this.currentPuzzle.shapes[0].hitPoints.every((point) => {
+            var coord = point.split(',')
+            var offset = scaledVector3(0, coord[1]-16, coord[0]-16, 1/32)
+            var ray = new BABYLON.Ray(origin.add(offset), direction, length)
+            var hit = scene.pickWithRay(ray)
+            BABYLON.RayHelper.CreateAndShow(ray, this.scene, new BABYLON.Color3(1, 0, 0.1));
+            if (!hit.hit) {
+                return false
+            }
+            return true
+        })
+        if (!hitAll) return false
+        let missAll = this.currentPuzzle.shapes[0].missPoints.every((point) => {
+            var coord = point.split(',')
+            var offset = scaledVector3(0, coord[1]-16, coord[0]-16, 1/32)
+            var ray = new BABYLON.Ray(origin.add(offset), direction, length)
+            var hit = scene.pickWithRay(ray)
+            BABYLON.RayHelper.CreateAndShow(ray, this.scene, new BABYLON.Color3(1, 1, 0.1));
+            if (hit.hit) {
+                if (hit.pickedMesh.name.indexOf('Puzzle') !== -1) return false
+            }
+            return true
+        })
+        if (!missAll) return false
+        console.log("PUZZLE SOLVED")
+        this.SetupNextPuzzle()
+        return true
     }
 }
 const gameManager = new GameManager()
@@ -435,6 +490,7 @@ var CreatePuzzleShape = (shapeObject, axis, scene) => {
 }
 
 var CreateColorMaterial = (colorHex, scene) => {
+    if (materials[colorHex]) return materials[colorHex]
     // Make the shape material
     var tex = new BABYLON.DynamicTexture("Texture-" + colorHex, {width:512, height:512}, scene);
     var ctx = tex.getContext();
@@ -443,6 +499,7 @@ var CreateColorMaterial = (colorHex, scene) => {
     ctx.fillStyle = colorHex;
     ctx.fillRect(0,0, 512, 512);
     tex.update()
+    materials[colorHex] = mat
     return mat
 }
 
@@ -473,20 +530,20 @@ var CreatePuzzle = function(shapeArrays, shapeMat, scene) {
     }, scene)
     
     var positions = [
-        {x: 0.25, y: 0.25, z: 0.25 },
-        {x: -0.25, y: 0.25, z: -0.25 },
-        {x: 0.25, y: -0.25, z: -0.25 },
-        {x: -0.25, y: -0.25, z: 0.25 }
+        scaledVector3(0.25, 0.25, 0.25, 1),
+        scaledVector3(-0.25, 0.25, -0.25, 1),
+        scaledVector3(0.25, -0.25, -0.25, 1),
+        scaledVector3(-0.25, -0.25, 0.25, 1)
     ]
-    positions.forEach((boxPosition, i) => {
-        let pivotPoint = scaledVector3(boxPosition.x, boxPosition.y, boxPosition.z, 1)
+    positions.forEach((pivotPoint, i) => {
         topStamp.position = pivotPoint
         let shapeCSG = resultCSG.intersect(BABYLON.CSG.FromMesh(topStamp))
-        let shapeMesh = shapeCSG.toMesh('Grabbable-Puzzle-' + i, shapeMat, scene, true)
+        var shapeMesh = shapeCSG.toMesh('Grabbable-Puzzle-' + i, shapeMat, scene, true)
         // Move the pivot to teh right spot
         shapeMesh.setPivotPoint(pivotPoint)
         resultMeshes.push(shapeMesh)
     })
+    // resultMeshes.push(resultCSG.toMesh('Grabbable-Test-Shape', shapeMat, scene, false))
     topStamp.dispose()
     shapeMeshes.forEach((mesh) => mesh.dispose())
     // Every puzzle will do the same four blocks
@@ -606,15 +663,15 @@ var createScene = () => {
             }
             lastDeviceQuaternion = currentDeviceQuaternion
             // Position on the XZ plane
-            var currentDevicePosition = grabbingController.devicePosition.clone()
-            if (lastDevicePosition) {
-                var differencePos = currentDevicePosition.subtract(lastDevicePosition)
-                differencePos.x = 0 // Don't move in the X direction
-                // console.log("grabbedMesh", grabbedMesh)
-                grabbedMesh.position.addInPlace(differencePos)
-                grabbedMesh.position.addInPlace(differencePos)
-            }
-            lastDevicePosition = currentDevicePosition
+            // var currentDevicePosition = grabbingController.devicePosition.clone()
+            // if (lastDevicePosition) {
+            //     var differencePos = currentDevicePosition.subtract(lastDevicePosition)
+            //     differencePos.x = 0 // Don't move in the X direction
+            //     // console.log("grabbedMesh", grabbedMesh)
+            //     grabbedMesh.position.addInPlace(differencePos)
+            //     grabbedMesh.position.addInPlace(differencePos)
+            // }
+            // lastDevicePosition = currentDevicePosition
 
         }
     })
@@ -736,7 +793,7 @@ vrHelper.onNewMeshSelected.add((mesh) => {
 });
 
 vrHelper.onSelectedMeshUnselected.add(() => {
-    selectedMesh = null;
+    selectedMesh = undefined;
 });
 
 // Behavior of the controllers
@@ -751,9 +808,8 @@ vrHelper.onControllerMeshLoaded.add((webVRController)=>{
         // if(webVRController.hand=="left")
         //grab
         if(stateObject.value > 0.1){ // Trigger started
-            if (selectedMesh !== null) {
+            if (selectedMesh !== undefined) {
                 // Only grab grabbable
-                console.log("grabbedMesh", selectedMesh.name)
                 grabbedMesh = selectedMesh
                 if (!grabbedMesh.rotationQuaternion) {
                     grabbedMesh.rotationQuaternion = new BABYLON.Vector4(0,0,0,1)

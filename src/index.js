@@ -20,6 +20,8 @@ var selectedMesh
 var grabbedMesh
 var grabbingController
 var lastDeviceQuaternion
+var startDeviceQuaternion
+var startMeshQuaternion
 var lastDevicePosition
 
 var eyeShape = {
@@ -466,41 +468,15 @@ class GameManager {
         this.solutionShape = solutionShape
     }
     checkSolution() {
-        // From the position, cast rays in the direction
-        let pos = this.currentPuzzle.position.split(',')
-        let sol = this.currentPuzzle.solution.split(',')
-        let direction = scaledVector3(sol[0], sol[1], sol[2])
-        direction = BABYLON.Vector3.Normalize(direction)
-        let origin = scaledVector3(pos[0], pos[1], pos[2]).subtract(direction)
-
-        var length = 2
-        let hitAll = this.currentPuzzle.shapes[0].hitPoints.every((point) => {
-            var coord = point.split(',')
-            var offset = scaledVector3(0, coord[1]-16, coord[0]-16, 1/32)
-            var ray = new BABYLON.Ray(origin.add(offset), direction, length)
-            var hit = scene.pickWithRay(ray)
-            BABYLON.RayHelper.CreateAndShow(ray, this.scene, new BABYLON.Color3(1, 0, 0.1));
-            if (!hit.hit) {
-                return false
-            }
-            return true
+        if (!this.puzzleShapes) return false
+        var solved = this.puzzleShapes.every((puzzleShape) => {
+            var rot = puzzleShape.rotationQuaternion.toEulerAngles()
+            return !(rot.x || rot.y || rot.z)
         })
-        if (!hitAll) return false
-        let missAll = this.currentPuzzle.shapes[0].missPoints.every((point) => {
-            var coord = point.split(',')
-            var offset = scaledVector3(0, coord[1]-16, coord[0]-16, 1/32)
-            var ray = new BABYLON.Ray(origin.add(offset), direction, length)
-            var hit = scene.pickWithRay(ray)
-            BABYLON.RayHelper.CreateAndShow(ray, this.scene, new BABYLON.Color3(1, 1, 0.1));
-            if (hit.hit) {
-                if (hit.pickedMesh.name.indexOf('Puzzle') !== -1) return false
-            }
-            return true
-        })
-        if (!missAll) return false
-        console.log("PUZZLE SOLVED")
-        this.SetupNextPuzzle()
-        return true
+        if (solved) {
+            this.SetupNextPuzzle()
+        }
+        return solved
     }
 }
 const gameManager = new GameManager()
@@ -509,6 +485,14 @@ const gameManager = new GameManager()
 var scaledVector3 = (x, y, z, scale) => {
     scale = scale || GRID_TO_UNITS
     return new BABYLON.Vector3(x * scale, y * scale, z * scale)
+}
+
+var roundToDegrees = (rot, deg) => {
+    var radians = deg * Math.PI / 180
+    rot.x = Math.round(rot.x / radians) * radians
+    rot.y = Math.round(rot.y / radians) * radians
+    rot.z = Math.round(rot.z / radians) * radians
+    return rot
 }
 
 var CreatePuzzleShape = (shapeObject, axis, scene) => {
@@ -746,24 +730,25 @@ var createScene = () => {
         if (grabbedMesh && grabbingController) {
             // Rotation
             var currentDeviceQuaternion = grabbingController.deviceRotationQuaternion.clone()
-            if (lastDeviceQuaternion) {
-                // Get the difference between the two quaternions
-                var differenceQuat = currentDeviceQuaternion.multiply( BABYLON.Quaternion.Inverse(lastDeviceQuaternion) )
-                // Add the difference to the grabbedMesh
-                grabbedMesh.rotationQuaternion = differenceQuat.multiply( grabbedMesh.rotationQuaternion.clone() )
-            }
-            lastDeviceQuaternion = currentDeviceQuaternion
-            // Position on the XZ plane
-            // var currentDevicePosition = grabbingController.devicePosition.clone()
-            // if (lastDevicePosition) {
-            //     var differencePos = currentDevicePosition.subtract(lastDevicePosition)
-            //     differencePos.x = 0 // Don't move in the X direction
-            //     // console.log("grabbedMesh", grabbedMesh)
-            //     grabbedMesh.position.addInPlace(differencePos)
-            //     grabbedMesh.position.addInPlace(differencePos)
+            // if (lastDeviceQuaternion) {
+            //     // Get the difference between the two quaternions
+            //     var differenceQuat = currentDeviceQuaternion.multiply( BABYLON.Quaternion.Inverse(lastDeviceQuaternion) )
+            //     // Add the difference to the grabbedMesh
+            //     grabbedMesh.rotationQuaternion = differenceQuat.multiply( grabbedMesh.rotationQuaternion.clone() )
             // }
-            // lastDevicePosition = currentDevicePosition
+            // lastDeviceQuaternion = currentDeviceQuaternion
 
+            if (startDeviceQuaternion && startMeshQuaternion) {
+                var differenceQuat = currentDeviceQuaternion.multiply(BABYLON.Quaternion.Inverse(startDeviceQuaternion))
+                
+                var quat = differenceQuat.multiply(startMeshQuaternion)
+                var rot = quat.toEulerAngles()
+                console.log(rot)
+                rotRounded = roundToDegrees(rot, 15)
+                console.log("rotRounded", rotRounded)
+                // 15 degrees is Math.PI / 12 radians
+                grabbedMesh.rotationQuaternion = BABYLON.Quaternion.FromEulerVector(rotRounded)
+            }
 
             // Lamp-0 should cast a ray, if it hits a Lamp, repeat
             if (grabbedMesh.name.indexOf('Lamp') !== -1) {
@@ -1006,9 +991,8 @@ vrHelper.onControllerMeshLoaded.add((webVRController)=>{
             if (selectedMesh !== undefined) {
                 // Only grab grabbable
                 grabbedMesh = selectedMesh
-                if (!grabbedMesh.rotationQuaternion) {
-                    grabbedMesh.rotationQuaternion = new BABYLON.Vector4(0,0,0,1)
-                }
+                startDeviceQuaternion = webVRController.deviceRotationQuaternion.clone()
+                startMeshQuaternion = (grabbedMesh.rotationQuaternion) ? grabbedMesh.rotationQuaternion.clone() : new BABYLON.Vector4(0,0,0,1)
                 grabbingController = webVRController
             }
         //ungrab   

@@ -377,13 +377,15 @@ var puzzles = [
     {
         // The Ray puzzle
         type: "rays",
-        rewardDoor: 'Door-1' // Closes the door
+        rewardDoor: 'Door-1', // Closes the door
+        rewardDarkness: true
     },
     {
         shapes: [scarabShape, eyeShape],
         type: 'double',
         position: '40,4,0',
-        solution: ['-5,-5,0', '-5,5,0']
+        solution: ['-5,-5,0', '-5,5,0'],
+        rewardLight: true
     }
 ]
 
@@ -416,6 +418,15 @@ class GameManager {
 
                 BABYLON.Animation.CreateAndStartAnimation('doorSlide', door, 'position.y', 30, 120, doorY, doorEndY, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
             }
+
+            if (this.currentPuzzle.rewardDarkness) {
+                BABYLON.Animation.CreateAndStartAnimation('lightsOff', this.light, 'intensity', 30, 120, 0.5, 0.01, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
+                // TODO: Turn off the Glow elements too
+            }
+            if (this.currentPuzzle.rewardLight) {
+                BABYLON.Animation.CreateAndStartAnimation('lightsOff', this.light, 'intensity', 30, 120, 0.01, 0.5, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
+            }
+
             // Also send the current puzzle into the floor
             if (this.puzzleShapes) {
                 this.puzzleShapes.forEach((shape) => {
@@ -567,7 +578,7 @@ var CreatePuzzle = function(shapeArrays, shapeMat, scene) {
     var resultMeshes = []
     // Make a mesh from each of the shapeArrays
     shapeArrays.forEach((shape, i) => {
-        var shapeMesh = CreatePuzzleShape(shape, axes[i],   )
+        var shapeMesh = CreatePuzzleShape(shape, axes[i], scene)
         shapeMeshes.push(shapeMesh)
     })
     // Make CSG from each
@@ -743,9 +754,7 @@ var createScene = () => {
                 
                 var quat = differenceQuat.multiply(startMeshQuaternion)
                 var rot = quat.toEulerAngles()
-                console.log(rot)
                 rotRounded = roundToDegrees(rot, 15)
-                console.log("rotRounded", rotRounded)
                 // 15 degrees is Math.PI / 12 radians
                 grabbedMesh.rotationQuaternion = BABYLON.Quaternion.FromEulerVector(rotRounded)
             }
@@ -779,7 +788,6 @@ var createScene = () => {
                         // BABYLON.RayHelper.CreateAndShow(ray, scene, new BABYLON.Color3(1, 0, 0.1));
                         if (hit.hit && hit.pickedMesh.name.indexOf('Lamp') !== -1) {
                             lamp = hit.pickedMesh
-                            hitMeshes.push(lamp.id)
                         } else {
                             glow.scaling.y = (hit.hit) ? hit.distance : length
                             missed = true
@@ -904,6 +912,8 @@ var createScene = () => {
     glow2.material = glow.material.clone()
     var glow3 = glow.clone('Glow-3')
     glow3.material = glow.material.clone()
+    glow.material.alpha = 0.2
+    glow.scaling.y = 50
 
     lamp.addChild(glow)
     glow.position = scaledVector3(0, 0.5, -0.25, 1)
@@ -913,11 +923,12 @@ var createScene = () => {
     glow2.position = scaledVector3(0, 0.5, -0.25, 1)
     lamp3.addChild(glow3)
     glow3.position = scaledVector3(0, 0.5, -0.25, 1)
+
     lamp.position = scaledVector3(55, 5, 0)
-    lamp1.position = scaledVector3(65, 5, 5)
+    lamp1.position = scaledVector3(85, 5, 30)
     // lamp1.position = scaledVector3(100, 5, 45)
-    lamp2.position = scaledVector3(100, 5, -45)
-    lamp3.position = scaledVector3(100, 45, 0)
+    lamp2.position = scaledVector3(85, 5, -40)
+    lamp3.position = scaledVector3(85, 45, 0)
 
     return scene
 }
@@ -931,6 +942,7 @@ light1.intensity = 0.5 // 0.5
 var light = new BABYLON.DirectionalLight('light2', new BABYLON.Vector3(1,0,0), scene)
 light.position.x = -500
 light.intensity = 0.2
+gameManager.light = light1
 
 // Shadows
 var shadowGenerator = new BABYLON.ShadowGenerator(2048, light);
@@ -939,6 +951,9 @@ gameManager.shadowGenerator = shadowGenerator
 gameManager.shapeMat = CreateColorMaterial('#3c7681', scene)
 
 gameManager.SetupNextPuzzle()
+// gameManager.SetupNextPuzzle()
+// gameManager.SetupNextPuzzle()
+// setTimeout(() => {gameManager.SetupNextPuzzle()}, 6000)
 
 
 

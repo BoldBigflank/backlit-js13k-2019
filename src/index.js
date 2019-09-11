@@ -12,6 +12,7 @@ const COLOR_GREY = new BABYLON.Color3(.6, .5, .49)
 const SQRT_2 = Math.sqrt(2)
 const GRID_TO_UNITS = 1/3
 const SHAPE_SCALE = 0.1
+const RAYCAST_COOLDOWN = 20 // Frames between lamp raycasts
 const SHAPE_SCALE_V3 = new BABYLON.Vector3(SHAPE_SCALE, SHAPE_SCALE, SHAPE_SCALE)
 var shapes = []
 var materials = []
@@ -232,8 +233,40 @@ var scarabShape = {
             '16,23'
         ]
     ],
-    hitPoints: [],
-    missPoints: []
+    hitPoints: [
+        '14,27',
+        '5,26',
+        '13,17',
+        '2,16',
+        '13,15',
+        '14,4',
+        '9,4',
+        '18,27',
+        '27,26',
+        '19,17',
+        '30,14',
+        '19,15',
+        '18,4',
+        '23,4'
+    ],
+    missPoints: [
+        '2,30',
+        '10,26',
+        '14,22',
+        '12,19',
+        '1,10',
+        '7,5',
+        '12,3',
+        '16,4',
+        '16,12',
+        '30,30',
+        '22,26',
+        '18,22',
+        '20,19',
+        '31,10',
+        '25,5',
+        '20,3'
+    ]
 }
 
 var ankhShape = {
@@ -330,16 +363,20 @@ var puzzles = [
     {
         shapes: [ankhShape, scarabShape],
         position: '0,4,0',
-        solution: '9,0,0'
+        solution: '9.5,0,0',
+        rewardDoor: 'Door-1'
     },
     {
-        shapes: [scarabShape, eyeShape],
+        shapes: [scarabShape, scarabShape],
         position: '40,4,0',
-        solution: '10,0,0'
+        solution: '9.5,0,0',
+        rewardDoor: 'Door-2'
     },
-    // {
-    //     // The Ray puzzle
-    // },
+    {
+        // The Ray puzzle
+        type: "rays",
+        rewardDoor: 'Door-1' // Closes the door
+    },
     {
         shapes: [scarabShape, eyeShape],
         type: 'double',
@@ -355,14 +392,50 @@ class GameManager {
         this.scene = null
         this.shapeMat = null
         this.shadowGenerator = null
+        this.raycastCooldown = RAYCAST_COOLDOWN
     }
     SetupNextPuzzle() {
+        console.log("SetupNextPuzzle")
         if (!this.scene || !this.shapeMat) {
             console.error('missing scene or shapeMat')
             return
         }
+
+
+        // Clean up the existing puzzle
+        if (this.currentPuzzleIndex > -1) {
+            console.log("it's a puzzle")
+            if (this.currentPuzzle.rewardDoor) {
+                console.log('there is a door')
+                var door = this.scene.getMeshByName(this.currentPuzzle.rewardDoor)
+                var doorY = door.position.y
+                var doorEndY = -1 * door.position.y
+                console.log("door", doorY, doorEndY, door)
+
+                BABYLON.Animation.CreateAndStartAnimation('doorSlide', door, 'position.y', 30, 120, doorY, doorEndY, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
+            }
+            // Also send the current puzzle into the floor
+            if (this.puzzleShapes) {
+                this.puzzleShapes.forEach((shape) => {
+                    let shapeY = shape.position.y
+                    BABYLON.Animation.CreateAndStartAnimation(shape.name + '-Slide', shape, 'position.y', 30, 120, shapeY, -1 * shapeY, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
+                })
+            }
+            if (this.solutionShape) {
+                let solutionY = this.solutionShape.position.y
+                BABYLON.Animation.CreateAndStartAnimation(this.solutionShape + '-Slide', this.solutionShape, 'position.y', 30, 120, solutionY, -1 * solutionY, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
+            }
+        }
+
         this.currentPuzzleIndex++
         this.currentPuzzle = puzzles[this.currentPuzzleIndex]
+        this.puzzleShapes = undefined
+        this.solutionShape = undefined
+        // If there's nothing to do, we're done!
+        if (!this.currentPuzzle.position) {
+            return
+        }
+
         let pos = this.currentPuzzle.position.split(',')
         let sol = this.currentPuzzle.solution.split(',')
         let position = scaledVector3(pos[0], pos[1], pos[2])
@@ -388,7 +461,7 @@ class GameManager {
         solutionShape.material = CreateColorMaterial('#00ffff')
         solutionShape.material.alpha = 0.3
 
-        solutionShape.scaling.z = 0.1
+        solutionShape.scaling.z = 0.01
         solutionShape.lookAt(position)
         this.solutionShape = solutionShape
     }
@@ -624,9 +697,9 @@ var createScene = () => {
     pathGround.material = materialGround
 
     // Wall
-    var wall1 = BABYLON.MeshBuilder.CreateBox('wall1', {
+    var wall1 = BABYLON.MeshBuilder.CreateBox('Door-1', {
         height: 9 * GRID_TO_UNITS,
-        width: 1 * GRID_TO_UNITS,
+        width: 3 * GRID_TO_UNITS,
         depth: 6 * GRID_TO_UNITS,
         faceColors: [
             COLOR_GREY,
@@ -637,8 +710,14 @@ var createScene = () => {
             COLOR_GREY
         ]
     }, scene)
-    wall1.position = scaledVector3(10, 4.5, 0)
+    wall1.position = scaledVector3(11, 4.5, 0)
     wall1.receiveShadows = true
+
+    var wall2 = wall1.clone('Door-2')
+    wall2.position = scaledVector3(50, 4.5, 0)
+    wall2.scaling.z = 4
+    wall2.scaling.y = 1.25
+    wall2.receiveShadows = true
 
     // Sky
     var stars = BABYLON.Mesh.CreateSphere('stars', 100, 1000, scene)
@@ -646,11 +725,23 @@ var createScene = () => {
 
     // Moon
     var moon = BABYLON.Mesh.CreateSphere('moon', 100, 75, scene)
+    var materialMoon = new BABYLON.StandardMaterial("MoonMaterial", scene)
     moon.position.x = -500
     moon.position.y = 50
+    moon.material = materialMoon
+    moon.material.emissiveColor = new BABYLON.Color3(0.97, 0.94, 0.94)
+    
+    // scene.registerBeforeRender(() => {
+    //     var glow = scene.getMeshByName('Grabbable-Lamp-0')
+    //     glow.rotationQuaternion = undefined
+    //     glow.rotation.z += 1 / 60
+    //     // var child = glow.getChildren()[0]
+    //     // child.scaling.y = (child.scaling.y + 1 / 30) % 20
+    // })
 
     // Used for grabbing and rotating shapes
     scene.onBeforeRenderObservable.add(() => {
+
         // Update the grabbed object
         if (grabbedMesh && grabbingController) {
             // Rotation
@@ -673,7 +764,53 @@ var createScene = () => {
             // }
             // lastDevicePosition = currentDevicePosition
 
+
+            // Lamp-0 should cast a ray, if it hits a Lamp, repeat
+            if (grabbedMesh.name.indexOf('Lamp') !== -1) {
+                gameManager.raycastCooldown--
+                if (gameManager.raycastCooldown < 0) {
+                    gameManager.raycastCooldown = RAYCAST_COOLDOWN
+
+                    let missed = false
+                    var lamp = scene.getMeshByName('Grabbable-Lamp-0')
+                    var hitMeshes = []
+                    while (hitMeshes.length < 5 && !missed) {
+                        hitMeshes.push(lamp.id)
+                        let glow = lamp.getChildren().find((child) => {
+                            return (child.name.indexOf("Glow") !== -1)
+                        })
+                        glow.material.alpha = 0.2
+                        let origin = lamp.position
+                        let direction = lamp.forward
+                        let length = 50
+                        let predicate = (mesh) => { 
+                            if (mesh.name.indexOf('Glow') !== -1) return false
+                            if (hitMeshes.indexOf(mesh.id) !== -1) return false
+                            return true
+                        }
+                        direction = BABYLON.Vector3.Normalize(direction)
+                        var ray = new BABYLON.Ray(origin, direction, length)
+                        var hit = scene.pickWithRay(ray, predicate)
+                        // BABYLON.RayHelper.CreateAndShow(ray, scene, new BABYLON.Color3(1, 0, 0.1));
+                        if (hit.hit && hit.pickedMesh.name.indexOf('Lamp') !== -1) {
+                            lamp = hit.pickedMesh
+                            hitMeshes.push(lamp.id)
+                        } else {
+                            glow.scaling.y = (hit.hit) ? hit.distance : length
+                            missed = true
+                        }
+                    }
+                    if (hitMeshes.length == 4) {
+                        if (gameManager.currentPuzzle.type == 'ray')
+                        gameManager.SetupNextPuzzle()
+                    } else {
+                        // TODO: Turn off the ones that didn't get selected
+                    }
+                    // TODO: Multiply ambient light in room by number of hit lamps
+                }
+            }
         }
+
     })
 
     // The pyramid
@@ -734,12 +871,69 @@ var createScene = () => {
     })
 
     var mat = new BABYLON.StandardMaterial('std', scene);
-        mat.alpha = 0.7;
+        // mat.alpha = 0.7;
 
     var FullBuilding = buildingCSG.toMesh('Building', mat, scene, false);
     building.dispose()
     roomStamp.dispose()
     FullBuilding.checkCollisions = true
+
+    // Place some spinnable lights
+    var lamp = BABYLON.MeshBuilder.CreateIcoSphere('Grabbable-Lamp-0', {
+        radius: 0.52,
+        subdivisions: 1
+    }, scene)
+    
+    var test = BABYLON.MeshBuilder.CreateCylinder('Test', {
+            height: 1,
+            diameterTop: 0.3,
+            diameterBottom: 0.1,
+            tessellation: 12,
+            cap: BABYLON.Mesh.NO_CAP
+        }, scene)
+    test.position.y = 0.5
+    test.setPivotPoint(new BABYLON.Vector3(0, -0.5, 0))
+    test.rotate(new BABYLON.Vector3(1, 0, 0), Math.PI * 0.5)
+    test.scaling.y = 10
+
+    var glow = BABYLON.MeshBuilder.CreateCylinder('Glow', {
+        height: 1,
+        diameterTop: 0.3,
+        diameterBottom: 0.1,
+        tessellation: 12,
+        cap: BABYLON.Mesh.NO_CAP
+    }, scene)
+    glow.setPivotPoint(new BABYLON.Vector3(0, -0.5, 0))
+    glow.position.y = -0.25
+    glow.rotate(new BABYLON.Vector3(1, 0, 0), Math.PI * 0.5)
+    glow.material = new BABYLON.StandardMaterial('Grabbable-Glow-Material', scene);
+    glow.material.alpha = 0.0
+    glow.material.emissiveColor = new BABYLON.Color3(0.97, 0.94, 0.94)
+    
+    var lamp1 = lamp.clone('Grabbable-Lamp-1')
+    var lamp2 = lamp.clone('Grabbable-Lamp-2')
+    var lamp3 = lamp.clone('Grabbable-Lamp-3')
+    var glow1 = glow.clone('Glow-1')
+    glow1.material = glow1.material.clone()
+    var glow2 = glow.clone('Glow-2')
+    glow2.material = glow.material.clone()
+    var glow3 = glow.clone('Glow-3')
+    glow3.material = glow.material.clone()
+
+    lamp.addChild(glow)
+    glow.position = scaledVector3(0, 0.5, -0.25, 1)
+    lamp1.addChild(glow1)
+    glow1.position = scaledVector3(0, 0.5, -0.25, 1)
+    lamp2.addChild(glow2)
+    glow2.position = scaledVector3(0, 0.5, -0.25, 1)
+    lamp3.addChild(glow3)
+    glow3.position = scaledVector3(0, 0.5, -0.25, 1)
+    lamp.position = scaledVector3(55, 5, 0)
+    lamp1.position = scaledVector3(65, 5, 5)
+    // lamp1.position = scaledVector3(100, 5, 45)
+    lamp2.position = scaledVector3(100, 5, -45)
+    lamp3.position = scaledVector3(100, 45, 0)
+
     return scene
 }
 
@@ -760,6 +954,7 @@ gameManager.shadowGenerator = shadowGenerator
 gameManager.shapeMat = CreateColorMaterial('#3c7681', scene)
 
 gameManager.SetupNextPuzzle()
+
 
 
 // VR Stuff

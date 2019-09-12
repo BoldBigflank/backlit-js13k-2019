@@ -365,6 +365,7 @@ var puzzles = [
     {
         type: 'puzzle',
         shapes: [ankhShape, scarabShape],
+        rotated: true,
         position: '0,4,0',
         solution: '9.5,0,0',
         rewardDoor: 'Door-1'
@@ -396,6 +397,9 @@ var puzzles = [
         solution: '-5,0,-5',
         rewardLight: true,
         rewardDoor: 'Door-1' // Reopens it
+    },
+    {
+        type: 'end'
     }
 ]
 
@@ -407,9 +411,10 @@ class GameManager {
         this.shapeMat = null
         this.shadowGenerator = null
         this.raycastCooldown = RAYCAST_COOLDOWN
+        this.puzzleParent = null
     }
     SetupNextPuzzle() {
-        console.log("SetupNextPuzzle")
+        console.log("SetupNextPuzzle", this.currentPuzzleIndex)
         if (!this.scene || !this.shapeMat) {
             console.error('missing scene or shapeMat')
             return
@@ -437,6 +442,7 @@ class GameManager {
             // Also send the current puzzle into the floor
             if (this.puzzleShapes) {
                 this.puzzleShapes.forEach((shape) => {
+                    shape.setParent(null)
                     let shapeY = shape.position.y
                     BABYLON.Animation.CreateAndStartAnimation(shape.name + '-Slide', shape, 'position.y', 30, 120, shapeY, -1 * shapeY, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
                 })
@@ -449,6 +455,9 @@ class GameManager {
 
         this.currentPuzzleIndex++
         this.currentPuzzle = puzzles[this.currentPuzzleIndex]
+        this.puzzleParent = this.puzzleParent || new BABYLON.Mesh('Puzzle-Parent', this.scene)
+        this.puzzleParent.position = BABYLON.Vector3.Zero()
+        this.puzzleParent.rotation = BABYLON.Vector3.Zero()
         this.puzzleShapes = undefined
         this.solutionShape = undefined
         // If there's nothing to do, we're done!
@@ -464,7 +473,12 @@ class GameManager {
         // Make the shapes
         var puzzleShapes = CreatePuzzle(this.currentPuzzle.shapes, this.shapeMat, this.scene)
         puzzleShapes.forEach((shape) => {
-            shape.position = position
+            shape.setParent(this.puzzleParent)
+            // shape.position = position
+
+            // if (this.currentPuzzle.rotated) {
+            //     shape.rotateAround(new BABYLON.Vector3(position.x, shape.position.y, position.z), new BABYLON.Vector3(0,1,0), Math.PI * 0.25)
+            // }
             // TODO: Shuffle the position/rotation of these
             shape.rotationQuaternion = BABYLON.Quaternion.FromEulerAngles(
                 Math.random() * 2 * Math.PI - Math.PI,
@@ -473,13 +487,10 @@ class GameManager {
             )
             this.shadowGenerator.getShadowMap().renderList.push(shape)
         })
+        this.puzzleParent.position = position
+        // if (this.currentPuzzle.rotated) this.puzzleParent.rotate(BABYLON.Vector3.Up(), Math.PI * 0.25)
         this.puzzleShapes = puzzleShapes
-        if (this.currentPuzzle.rotated) {
-            this.puzzleShapes.forEach((shape) => {
-                shape.rotateAround(position, new BABYLON.Vector3(0, 1, 0), Math.PI * 0.25)
-            })
-        }
-
+        
         // Make the solution template
         var solutionShape = CreatePuzzleShape(this.currentPuzzle.shapes[0], 'z', this.scene)
         solutionShape.position = position.add(solution)
@@ -508,7 +519,7 @@ class GameManager {
             this.puzzleShapes.forEach((shape) => {
                 this.shadowGeneratorNW.addShadowCaster(shape, true)
                 this.shadowGeneratorSW.addShadowCaster(shape, true)
-                
+
             })
         }
     }
@@ -525,7 +536,8 @@ class GameManager {
         if (this.currentPuzzle.type === 'puzzle') {
             if (!this.puzzleShapes) return false
             var solved = this.puzzleShapes.every((puzzleShape) => {
-                var rot = puzzleShape.rotationQuaternion.toEulerAngles()
+                var quat = puzzleShape.rotationQuaternion
+                var rot = (quat) ? quat.toEulerAngles() : puzzleShape.rotation
                 return !(rot.x || rot.y || rot.z)
             })
             if (solved) {
@@ -649,6 +661,8 @@ var CreatePuzzle = function(shapeArrays, shapeMat, scene) {
         scaledVector3(0.25, -0.25, -0.25, 1),
         scaledVector3(-0.25, -0.25, 0.25, 1)
     ]
+
+
     positions.forEach((pivotPoint, i) => {
         topStamp.position = pivotPoint
         let shapeCSG = resultCSG.intersect(BABYLON.CSG.FromMesh(topStamp))
@@ -803,13 +817,9 @@ var createScene = () => {
     moon.material = materialMoon
     moon.material.emissiveColor = new BABYLON.Color3(0.97, 0.94, 0.94)
     
-    // scene.registerBeforeRender(() => {
-    //     var glow = scene.getMeshByName('Grabbable-Lamp-0')
-    //     glow.rotationQuaternion = undefined
-    //     glow.rotation.z += 1 / 60
-    //     // var child = glow.getChildren()[0]
-    //     // child.scaling.y = (child.scaling.y + 1 / 30) % 20
-    // })
+    scene.registerBeforeRender(() => {
+        // gameManager.puzzleParent.rotate(BABYLON.Vector3.Up(), Math.PI / 180)
+    })
 
     // Used for grabbing and rotating shapes
     scene.onBeforeRenderObservable.add(() => {
@@ -1052,6 +1062,7 @@ vrHelper.raySelectionPredicate = (mesh) => {
     if (mesh.name.indexOf('Grabbable') !== -1) return true
     if (mesh.name.indexOf('Holdable') !== -1) return true
     if (mesh.name.indexOf('Ground') !== -1) return true
+    if (mesh.name.indexOf('Door') !== -1) return true // Prevent teleporting/grabbing through walls
     return false
 };
 
@@ -1111,8 +1122,8 @@ window.addEventListener('resize', () => {
     engine.resize()
 })
 
-// document.addEventListener('keypress', (e) => {
-//     if (e.keyCode == 32) {
-//         gameManager.SetupNextPuzzle()
-//     }
-// })
+document.addEventListener('keypress', (e) => {
+    if (e.keyCode == 32) {
+        gameManager.SetupNextPuzzle()
+    }
+})

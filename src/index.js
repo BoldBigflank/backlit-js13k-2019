@@ -363,15 +363,17 @@ var ankhShape = {
 
 var puzzles = [
     {
+        type: 'puzzle',
         shapes: [ankhShape, scarabShape],
         position: '0,4,0',
         solution: '9.5,0,0',
         rewardDoor: 'Door-1'
     },
     {
+        type: 'puzzle',
         shapes: [scarabShape, scarabShape],
         position: '40,4,0',
-        solution: '9.5,0,0',
+        solution: '8.5,0,0',
         rewardDoor: 'Door-2'
     },
     {
@@ -382,13 +384,16 @@ var puzzles = [
     {
         type: 'treasure',
         rewardDoor: 'Door-1', // Closes the door
-        rewardDarkness: true
+        rewardDarkness: true,
+        treasureTouch: true
     },
     {
+        type: 'puzzle',
+        extraLights: true,
         shapes: [scarabShape, eyeShape],
-        type: 'double',
+        rotated: true,
         position: '40,4,0',
-        solution: ['-5,-5,0', '-5,5,0'],
+        solution: '-5,0,-5',
         rewardLight: true,
         rewardDoor: 'Door-1' // Reopens it
     }
@@ -469,6 +474,11 @@ class GameManager {
             this.shadowGenerator.getShadowMap().renderList.push(shape)
         })
         this.puzzleShapes = puzzleShapes
+        if (this.currentPuzzle.rotated) {
+            this.puzzleShapes.forEach((shape) => {
+                shape.rotateAround(position, new BABYLON.Vector3(0, 1, 0), Math.PI * 0.25)
+            })
+        }
 
         // Make the solution template
         var solutionShape = CreatePuzzleShape(this.currentPuzzle.shapes[0], 'z', this.scene)
@@ -479,17 +489,51 @@ class GameManager {
         solutionShape.scaling.z = 0.01
         solutionShape.lookAt(position)
         this.solutionShape = solutionShape
-    }
-    checkSolution() {
-        if (!this.puzzleShapes) return false
-        var solved = this.puzzleShapes.every((puzzleShape) => {
-            var rot = puzzleShape.rotationQuaternion.toEulerAngles()
-            return !(rot.x || rot.y || rot.z)
-        })
-        if (solved) {
-            this.SetupNextPuzzle()
+
+        // Final puzzle, two different lights
+        if (this.currentPuzzle.extraLights) {
+            var lightNW = new BABYLON.DirectionalLight('Light-NW', new BABYLON.Vector3(-1, 0, 1), this.scene)
+            lightNW.position = scaledVector3(47, 4.5, -7)
+            // lightNW.position.x = 500
+            lightNW.intensity = 0.5
+
+            var lightSW = lightNW.clone('Light-SW')
+            lightSW.direction = new BABYLON.Vector3(-1, 0, -1)
+            lightSW.position = scaledVector3(47, 4.5, 7)
+
+            console.log("adding", this.puzzleShapes.length)
+            this.shadowGeneratorNW = new BABYLON.ShadowGenerator(2048, lightNW);
+            this.shadowGeneratorSW = new BABYLON.ShadowGenerator(2048, lightSW);
+
+            this.puzzleShapes.forEach((shape) => {
+                this.shadowGeneratorNW.addShadowCaster(shape, true)
+                this.shadowGeneratorSW.addShadowCaster(shape, true)
+                
+            })
         }
-        return solved
+    }
+    CheckSolution() {
+        var result = false
+        if (this.currentPuzzle.type === 'treasure') {
+            if (grabbedMesh && grabbedMesh.name.indexOf('Treasure' !== -1)) {
+                result = true
+                this.SetupNextPuzzle()
+            }
+        }
+
+        // Puzzle Shapes
+        if (this.currentPuzzle.type === 'puzzle') {
+            if (!this.puzzleShapes) return false
+            var solved = this.puzzleShapes.every((puzzleShape) => {
+                var rot = puzzleShape.rotationQuaternion.toEulerAngles()
+                return !(rot.x || rot.y || rot.z)
+            })
+            if (solved) {
+                this.SetupNextPuzzle()
+                result = true
+            }
+        }
+        return result
     }
 }
 const gameManager = new GameManager()
@@ -657,8 +701,8 @@ var createScene = () => {
     var ctx = textureGround.getContext();
     ctx.fillStyle = '#f1bdaa'
     ctx.fillRect(0,0,512,512)
-    ctx.fillStyle = 'black'
-    ctx.fillRect(192, 192, 128, 128)
+    // ctx.fillStyle = 'black'
+    // ctx.fillRect(192, 192, 128, 128)
     textureGround.update()
     var materialGround = new BABYLON.StandardMaterial("GroundMaterial", scene)
     materialGround.diffuseTexture = textureGround
@@ -706,11 +750,11 @@ var createScene = () => {
         ]
     }, scene)
     wall1.scaling = scaledVector3(3, 9, 6)
-    wall1.position = scaledVector3(11, 4.5, 0)
+    wall1.position = scaledVector3(11, 4.49, 0)
     wall1.receiveShadows = true
 
     var wall2 = wall1.clone('Door-2')
-    wall2.position = scaledVector3(50, 4.5, 0)
+    wall2.position = scaledVector3(50, 5.99, 0)
     wall2.scaling = scaledVector3(3, 12, 24)
     wall2.receiveShadows = true
 
@@ -718,6 +762,17 @@ var createScene = () => {
     wall3.position = scaledVector3(100, 4.5, 0)
     wall3.scaling = scaledVector3(5, 9, 5)
     wall3.receiveShadows = true
+
+    var columnSW = wall1.clone('Column-SW')
+    columnSW.position = scaledVector3(33, 10, -7)
+    columnSW.scaling = scaledVector3(3, 20, 3)
+    columnSW.rotate(new BABYLON.Vector3(0, 1, 0), Math.PI * 0.25)
+    columnSW.receiveShadows = true
+
+    var columnNW = columnSW.clone('Column-NW')
+    columnNW.position = scaledVector3(33, 10, 7)
+    columnNW.receiveShadows = true
+    
 
     var treasureShape = CreatePuzzleShape(scarabShape, 'x', scene)
     treasureShape.material = new BABYLON.StandardMaterial("TreasureMaterial", scene)
@@ -955,11 +1010,12 @@ var scene = createScene()
 gameManager.scene = scene
 
 // Lights
-var light1 = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(-1, 1, 0.01), scene)
-light1.intensity = 0.5 // 0.5
 var light = new BABYLON.DirectionalLight('light2', new BABYLON.Vector3(1,0,0), scene)
 light.position.x = -500
 light.intensity = 0.2
+
+var light1 = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(-1, 1, 0.01), scene)
+light1.intensity = 0.5 // 0.5
 gameManager.light = light1
 
 // Shadows
@@ -1032,13 +1088,14 @@ vrHelper.onControllerMeshLoaded.add((webVRController)=>{
                 startDeviceQuaternion = webVRController.deviceRotationQuaternion.clone()
                 startMeshQuaternion = (grabbedMesh.rotationQuaternion) ? grabbedMesh.rotationQuaternion.clone() : BABYLON.Quaternion.FromEulerVector(grabbedMesh.rotation)
                 grabbingController = webVRController
+                gameManager.CheckSolution()
             }
         //ungrab   
         } else { // Trigger ended
             if (grabbedMesh) {
                 lastDeviceQuaternion = undefined
                 lastDevicePosition = undefined
-                gameManager.checkSolution()
+                gameManager.CheckSolution()
             }
             grabbedMesh = null
             grabbingController = null

@@ -377,6 +377,10 @@ var puzzles = [
     {
         // The Ray puzzle
         type: "rays",
+        rewardDoor: 'Door-Treasure'
+    },
+    {
+        type: 'treasure',
         rewardDoor: 'Door-1', // Closes the door
         rewardDarkness: true
     },
@@ -385,7 +389,8 @@ var puzzles = [
         type: 'double',
         position: '40,4,0',
         solution: ['-5,-5,0', '-5,5,0'],
-        rewardLight: true
+        rewardLight: true,
+        rewardDoor: 'Door-1' // Reopens it
     }
 ]
 
@@ -408,14 +413,11 @@ class GameManager {
 
         // Clean up the existing puzzle
         if (this.currentPuzzleIndex > -1) {
-            console.log("it's a puzzle")
             if (this.currentPuzzle.rewardDoor) {
-                console.log('there is a door')
                 var door = this.scene.getMeshByName(this.currentPuzzle.rewardDoor)
                 var doorY = door.position.y
                 var doorEndY = -1 * door.position.y
-                console.log("door", doorY, doorEndY, door)
-
+                
                 BABYLON.Animation.CreateAndStartAnimation('doorSlide', door, 'position.y', 30, 120, doorY, doorEndY, BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT);
             }
 
@@ -693,9 +695,7 @@ var createScene = () => {
 
     // Wall
     var wall1 = BABYLON.MeshBuilder.CreateBox('Door-1', {
-        height: 9 * GRID_TO_UNITS,
-        width: 3 * GRID_TO_UNITS,
-        depth: 6 * GRID_TO_UNITS,
+        size: 1,
         faceColors: [
             COLOR_GREY,
             COLOR_GREY,
@@ -705,14 +705,36 @@ var createScene = () => {
             COLOR_GREY
         ]
     }, scene)
+    wall1.scaling = scaledVector3(3, 9, 6)
     wall1.position = scaledVector3(11, 4.5, 0)
     wall1.receiveShadows = true
 
     var wall2 = wall1.clone('Door-2')
     wall2.position = scaledVector3(50, 4.5, 0)
-    wall2.scaling.z = 4
-    wall2.scaling.y = 1.25
+    wall2.scaling = scaledVector3(3, 12, 24)
     wall2.receiveShadows = true
+
+    var wall3 = wall1.clone('Door-Treasure')
+    wall3.position = scaledVector3(100, 4.5, 0)
+    wall3.scaling = scaledVector3(5, 9, 5)
+    wall3.receiveShadows = true
+
+    var treasureShape = CreatePuzzleShape(scarabShape, 'x', scene)
+    treasureShape.material = new BABYLON.StandardMaterial("TreasureMaterial", scene)
+    treasureShape.position = scaledVector3(100, 4.5, 0)
+    treasureShape.scaling = scaledVector3(0.25, 1, 1)
+    treasureShape.name = 'Holdable-Treasure'
+
+    // Gold
+    treasureShape.material.ambientColor = new BABYLON.Color3(0.24, 0.22, 0.06)
+    treasureShape.material.diffuseColor = new BABYLON.Color3(0.34, 0.31, .09)
+    treasureShape.material.specularColor = new BABYLON.Color3(0.797, 0.724, .21)
+    // treasureShape.material.emissiveColor = BABYLON.Color3.Yellow()
+    
+    
+
+
+
 
     // Sky
     var stars = BABYLON.Mesh.CreateSphere('stars', 100, 1000, scene)
@@ -739,25 +761,29 @@ var createScene = () => {
 
         // Update the grabbed object
         if (grabbedMesh && grabbingController) {
-            // Rotation
-            var currentDeviceQuaternion = grabbingController.deviceRotationQuaternion.clone()
-            // if (lastDeviceQuaternion) {
-            //     // Get the difference between the two quaternions
-            //     var differenceQuat = currentDeviceQuaternion.multiply( BABYLON.Quaternion.Inverse(lastDeviceQuaternion) )
-            //     // Add the difference to the grabbedMesh
-            //     grabbedMesh.rotationQuaternion = differenceQuat.multiply( grabbedMesh.rotationQuaternion.clone() )
-            // }
-            // lastDeviceQuaternion = currentDeviceQuaternion
-
-            if (startDeviceQuaternion && startMeshQuaternion) {
-                var differenceQuat = currentDeviceQuaternion.multiply(BABYLON.Quaternion.Inverse(startDeviceQuaternion))
-                
-                var quat = differenceQuat.multiply(startMeshQuaternion)
-                var rot = quat.toEulerAngles()
-                rotRounded = roundToDegrees(rot, 15)
-                // 15 degrees is Math.PI / 12 radians
-                grabbedMesh.rotationQuaternion = BABYLON.Quaternion.FromEulerVector(rotRounded)
+            // Put it on the user's hand
+            if (grabbedMesh.name.indexOf('Holdable') !== -1) {
+                // grabbedMesh.position = grabbingController.devicePosition
+                // grabbingController.mesh.addChild(grabbedMesh)
+                grabbedMesh.position = grabbingController.mesh.position.clone()
+                // grabbedMesh.rotationQuaternion = grabbingController.rotationQuaternion 
             }
+
+            // Rotation
+            if (grabbedMesh.name.indexOf('Grabbable') !== -1 || 
+                grabbedMesh.name.indexOf('Holdable') !== -1 ) {
+                var currentDeviceQuaternion = grabbingController.deviceRotationQuaternion.clone()
+                if (startDeviceQuaternion && startMeshQuaternion) {
+                    var differenceQuat = currentDeviceQuaternion.multiply(BABYLON.Quaternion.Inverse(startDeviceQuaternion))
+                    
+                    var quat = differenceQuat.multiply(startMeshQuaternion)
+                    var rot = quat.toEulerAngles()
+                    rotRounded = roundToDegrees(rot, 15)
+                    // 15 degrees is Math.PI / 12 radians
+                    grabbedMesh.rotationQuaternion = BABYLON.Quaternion.FromEulerVector(rotRounded)
+                }
+            }
+
 
             // Lamp-0 should cast a ray, if it hits a Lamp, repeat
             if (grabbedMesh.name.indexOf('Lamp') !== -1) {
@@ -864,7 +890,11 @@ var createScene = () => {
     })
 
     var mat = new BABYLON.StandardMaterial('std', scene);
-        // mat.alpha = 0.7;
+    mat.ambientColor = new BABYLON.Color4(0.4, 0.4, 0.4, 0.922)
+    mat.diffuseColor = new BABYLON.Color4(0.829, 0.829, 0.829, 0.922)
+    mat.specularColor = new BABYLON.Color4(0.296648, 0.296648, 0.296648, 0.922 )
+
+    // mat.alpha = 0.7;
 
     var FullBuilding = buildingCSG.toMesh('Building', mat, scene, false);
     building.dispose()
@@ -877,18 +907,6 @@ var createScene = () => {
         subdivisions: 1
     }, scene)
     
-    var test = BABYLON.MeshBuilder.CreateCylinder('Test', {
-            height: 1,
-            diameterTop: 0.3,
-            diameterBottom: 0.1,
-            tessellation: 12,
-            cap: BABYLON.Mesh.NO_CAP
-        }, scene)
-    test.position.y = 0.5
-    test.setPivotPoint(new BABYLON.Vector3(0, -0.5, 0))
-    test.rotate(new BABYLON.Vector3(1, 0, 0), Math.PI * 0.5)
-    test.scaling.y = 10
-
     var glow = BABYLON.MeshBuilder.CreateCylinder('Glow', {
         height: 1,
         diameterTop: 0.3,
@@ -948,7 +966,14 @@ gameManager.light = light1
 var shadowGenerator = new BABYLON.ShadowGenerator(2048, light);
 gameManager.shadowGenerator = shadowGenerator
 
-gameManager.shapeMat = CreateColorMaterial('#3c7681', scene)
+// gameManager.shapeMat = CreateColorMaterial('#3c7681', scene)
+var shapeMat = new BABYLON.StandardMaterial("Material-Shape", scene);
+
+// Obsidian
+shapeMat.ambientColor = new BABYLON.Color4(0.05375, 0.05, 0.06625, 0.82)
+shapeMat.diffuseColor = new BABYLON.Color4(0.18275, 0.17, 0.22525, 0.82)
+shapeMat.specularColor = new BABYLON.Color4(0.332741, 0.328634, 0.346435, 0.82 )
+gameManager.shapeMat = shapeMat
 
 gameManager.SetupNextPuzzle()
 // gameManager.SetupNextPuzzle()
@@ -968,13 +993,10 @@ vrHelper.enableTeleportation({floorMeshes: floorMeshes});
 vrHelper.enableInteractions()
 // What meshes to interact with
 vrHelper.raySelectionPredicate = (mesh) => {
-    if (mesh.name.indexOf("Grabbable") !== -1) {
-        return true;
-    }
-    if (mesh.name.indexOf("Ground") !== -1) {
-        return true;
-    }
-    return false;
+    if (mesh.name.indexOf('Grabbable') !== -1) return true
+    if (mesh.name.indexOf('Holdable') !== -1) return true
+    if (mesh.name.indexOf('Ground') !== -1) return true
+    return false
 };
 
 vrHelper.onAfterEnteringVRObservable.add(() => {
@@ -983,7 +1005,8 @@ vrHelper.onAfterEnteringVRObservable.add(() => {
 
 // Keep track of the selected mesh
 vrHelper.onNewMeshSelected.add((mesh) => {
-    if (mesh.name.indexOf('Grabbable') === -1) return
+    if (mesh.name.indexOf('Grabbable') === -1 &&
+        mesh.name.indexOf('Holdable') === -1) return
     selectedMesh = mesh;
 });
 
@@ -1007,18 +1030,18 @@ vrHelper.onControllerMeshLoaded.add((webVRController)=>{
                 // Only grab grabbable
                 grabbedMesh = selectedMesh
                 startDeviceQuaternion = webVRController.deviceRotationQuaternion.clone()
-                startMeshQuaternion = (grabbedMesh.rotationQuaternion) ? grabbedMesh.rotationQuaternion.clone() : new BABYLON.Vector4(0,0,0,1)
+                startMeshQuaternion = (grabbedMesh.rotationQuaternion) ? grabbedMesh.rotationQuaternion.clone() : BABYLON.Quaternion.FromEulerVector(grabbedMesh.rotation)
                 grabbingController = webVRController
             }
         //ungrab   
         } else { // Trigger ended
             if (grabbedMesh) {
-                // webVRController.mesh.removeChild(grabbedMesh);
                 lastDeviceQuaternion = undefined
                 lastDevicePosition = undefined
                 gameManager.checkSolution()
             }
             grabbedMesh = null
+            grabbingController = null
         }
     });
 });
@@ -1030,3 +1053,9 @@ engine.runRenderLoop(() => {
 window.addEventListener('resize', () => {
     engine.resize()
 })
+
+// document.addEventListener('keypress', (e) => {
+//     if (e.keyCode == 32) {
+//         gameManager.SetupNextPuzzle()
+//     }
+// })

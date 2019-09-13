@@ -379,8 +379,29 @@ var ankhShape = {
 
 var messages = [
     {
-        puzzleIndex: 0,
+        puzzles: [0],
         name: 'Message-0',
+        position: scaledVector3(-500, 3, 3),
+        lines: [
+            "",
+            "Press up on the track",
+            "pad to teleport."
+        ]
+    },
+    {
+        puzzles: [0],
+        name: 'Message-Intro',
+        position: scaledVector3(-510, 4, 0),
+        lines: [
+            "Once per year, the",
+            "Moon lights up the path.",
+            "Entry is normally impossible",
+            "except for right now."
+        ]
+    },
+    {
+        puzzles: [0],
+        name: 'Message-1',
         position: scaledVector3(-300, 5, 0),
         lines: [
             "You came at the right time.",
@@ -389,12 +410,22 @@ var messages = [
             "I believe in you"
         ]
     },{
-        name: 'Message-1',
+        puzzles: [0],
+        name: 'Message-2',
         position: scaledVector3(0, 1, 0),
         lines: [
             "Your preparations have",
             "paid off. You see the ",
             "path forward"
+        ]
+    },{
+        puzzles: [5],
+        name: 'Message-End',
+        position: scaledVector3(0,5,0),
+        lines: [
+            "You made it out!",
+            "Congrats!",
+            "Thanks for playing :)"
         ]
     }
 
@@ -428,14 +459,9 @@ var puzzles = [
         treasureTouch: true
     },
     {
-        type: 'puzzle',
-        extraLights: true,
-        shapes: [scarabShape, eyeShape],
-        rotated: true,
-        position: '40,4,0',
-        solution: '-5,0,-5',
+        type: 'useScarab',
         rewardLight: true,
-        rewardDoor: 'Door-1' // Reopens it
+        rewardDoor: 'Door-1'
     },
     {
         type: 'end'
@@ -499,6 +525,27 @@ class GameManager {
         this.puzzleParent.rotation = BABYLON.Vector3.Zero()
         this.puzzleShapes = undefined
         this.solutionShape = undefined
+
+
+        // Final puzzle, two different lights
+        if (this.currentPuzzle.type == 'useScarab') {
+            var lightNW = new BABYLON.DirectionalLight('Light-NW', new BABYLON.Vector3(-1, 0, 1), this.scene)
+            lightNW.position = scaledVector3(47, 4.5, -7)
+            // lightNW.position.x = 500
+            lightNW.intensity = 0.5
+
+            var lightSW = lightNW.clone('Light-SW')
+            lightSW.direction = new BABYLON.Vector3(-1, 0, -1)
+            lightSW.position = scaledVector3(47, 4.5, 7)
+
+            this.shadowGeneratorNW = new BABYLON.ShadowGenerator(2048, lightNW);
+            this.shadowGeneratorSW = new BABYLON.ShadowGenerator(2048, lightSW);
+
+            let treasureShape = this.scene.getMeshByName('Holdable-Treasure')
+            this.shadowGeneratorNW.addShadowCaster(treasureShape, true)
+            this.shadowGeneratorSW.addShadowCaster(treasureShape, true)
+        }
+
         // If there's nothing to do, we're done!
         if (!this.currentPuzzle.position) {
             return
@@ -540,27 +587,10 @@ class GameManager {
         solutionShape.lookAt(position)
         this.solutionShape = solutionShape
 
-        // Final puzzle, two different lights
-        if (this.currentPuzzle.extraLights) {
-            var lightNW = new BABYLON.DirectionalLight('Light-NW', new BABYLON.Vector3(-1, 0, 1), this.scene)
-            lightNW.position = scaledVector3(47, 4.5, -7)
-            // lightNW.position.x = 500
-            lightNW.intensity = 0.5
 
-            var lightSW = lightNW.clone('Light-SW')
-            lightSW.direction = new BABYLON.Vector3(-1, 0, -1)
-            lightSW.position = scaledVector3(47, 4.5, 7)
-
-            console.log("adding", this.puzzleShapes.length)
-            this.shadowGeneratorNW = new BABYLON.ShadowGenerator(2048, lightNW);
-            this.shadowGeneratorSW = new BABYLON.ShadowGenerator(2048, lightSW);
-
-            this.puzzleShapes.forEach((shape) => {
-                this.shadowGeneratorNW.addShadowCaster(shape, true)
-                this.shadowGeneratorSW.addShadowCaster(shape, true)
-
-            })
-        }
+        messages.forEach((message) => { // turn on the proper nodes
+            this.scene.getMeshByName(message.name).setEnabled(message.puzzles.includes(this.currentPuzzleIndex))
+        })
     }
     CheckSolution() {
         var result = false
@@ -582,6 +612,15 @@ class GameManager {
             if (solved) {
                 this.SetupNextPuzzle()
                 result = true
+            }
+        }
+
+        if (this.currentPuzzle.type === 'useScarab') {
+            var scarab = this.scene.getMeshByName('Holdable-Treasure')
+            var distance = scarab.absolutePosition.subtract(scaledVector3(40, scarab.position.y ,0)).length()
+            console.log('distance', distance)
+            if (distance < 1.5) {
+                this.SetupNextPuzzle()
             }
         }
         return result
@@ -849,7 +888,7 @@ var createScene = () => {
     treasureShape.material.ambientColor = new BABYLON.Color3(0.24, 0.22, 0.06)
     treasureShape.material.diffuseColor = new BABYLON.Color3(0.34, 0.31, .09)
     treasureShape.material.specularColor = new BABYLON.Color3(0.797, 0.724, .21)
-    // treasureShape.material.emissiveColor = BABYLON.Color3.Yellow()
+    treasureShape.material.emissiveColor = new BABYLON.Color4(.1, .1, .1, 1)
     BABYLON.Animation.CreateAndStartAnimation('float', treasureShape, 'rotation.y', 30, 120, 0, Math.PI * 2, BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE);
     
 
@@ -870,12 +909,12 @@ var createScene = () => {
     
     // Place a node for each message
     messages.forEach((message) => {
-        console.log("Message", message.name, message.position)
         let node = BABYLON.MeshBuilder.CreateIcoSphere(message.name, {
             radius: 0.15
         }, scene)
         node.position = message.position
         BABYLON.Animation.CreateAndStartAnimation('float', node, 'rotation.y', 30, 120, 0, Math.PI * 2, BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE);
+        node.setEnabled(false)
     })
 
     // Message text node
@@ -956,9 +995,10 @@ var createScene = () => {
                             missed = true
                         }
                     }
+                    console.log("hitmeshes", hitMeshes)
                     if (hitMeshes.length == 4) {
-                        if (gameManager.currentPuzzle.type == 'ray')
-                        gameManager.SetupNextPuzzle()
+                        if (gameManager.currentPuzzle.type == 'rays')
+                            gameManager.SetupNextPuzzle()
                     } else {
                         // TODO: Turn off the ones that didn't get selected
                     }
@@ -1034,6 +1074,7 @@ var createScene = () => {
     // mat.alpha = 0.7;
 
     var FullBuilding = buildingCSG.toMesh('Building', mat, scene, false);
+    FullBuilding.receiveShadows = true
     building.dispose()
     roomStamp.dispose()
     FullBuilding.checkCollisions = true
@@ -1084,6 +1125,10 @@ var createScene = () => {
     // lamp1.position = scaledVector3(100, 5, 45)
     lamp2.position = scaledVector3(85, 5, -40)
     lamp3.position = scaledVector3(85, 45, 0)
+    lamp.lookAt(treasureShape.position)
+    lamp2.lookAt(treasureShape.position)
+    lamp3.lookAt(treasureShape.position)
+    lamp1.lookAt(treasureShape.position)
 
     return scene
 }
@@ -1114,10 +1159,6 @@ shapeMat.specularColor = new BABYLON.Color4(0.332741, 0.328634, 0.346435, 0.82 )
 gameManager.shapeMat = shapeMat
 
 gameManager.SetupNextPuzzle()
-// gameManager.SetupNextPuzzle()
-// gameManager.SetupNextPuzzle()
-// setTimeout(() => {gameManager.SetupNextPuzzle()}, 6000)
-
 
 
 // VR Stuff
@@ -1134,7 +1175,10 @@ vrHelper.raySelectionPredicate = (mesh) => {
     if (mesh.name.indexOf('Grabbable') !== -1) return true
     if (mesh.name.indexOf('Holdable') !== -1) return true
     if (mesh.name.indexOf('Ground') !== -1) return true
-    if (mesh.name.indexOf('Message') !== -1) return true
+    if (mesh.name.indexOf('Message') !== -1) {
+        if (mesh.isEnabled())
+        return true
+    }
     if (mesh.name.indexOf('Door') !== -1) return true // Prevent teleporting/grabbing through walls
     return false
 };

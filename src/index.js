@@ -23,6 +23,22 @@ var lastDeviceQuaternion
 var startDeviceQuaternion
 var startMeshQuaternion
 var lastDevicePosition
+var billboardMaterial
+
+// Helper Functions
+var scaledVector3 = (x, y, z, scale) => {
+    scale = scale || GRID_TO_UNITS
+    return new BABYLON.Vector3(x * scale, y * scale, z * scale)
+}
+
+var roundToDegrees = (rot, deg) => {
+    var radians = deg * Math.PI / 180
+    rot.x = Math.round(rot.x / radians) * radians
+    rot.y = Math.round(rot.y / radians) * radians
+    rot.z = Math.round(rot.z / radians) * radians
+    return rot
+}
+
 
 var eyeShape = {
     shouldMirror: false,
@@ -361,6 +377,29 @@ var ankhShape = {
     ]
 }
 
+var messages = [
+    {
+        puzzleIndex: 0,
+        name: 'Message-0',
+        position: scaledVector3(-300, 5, 0),
+        lines: [
+            "You came at the right time.",
+            "Get the Golden Scarab",
+            "And bring it back.",
+            "I believe in you"
+        ]
+    },{
+        name: 'Message-1',
+        position: scaledVector3(0, 1, 0),
+        lines: [
+            "Your preparations have",
+            "paid off. You see the ",
+            "path forward"
+        ]
+    }
+
+]
+
 var puzzles = [
     {
         type: 'puzzle',
@@ -550,20 +589,6 @@ class GameManager {
 }
 const gameManager = new GameManager()
 
-// Helper Functions
-var scaledVector3 = (x, y, z, scale) => {
-    scale = scale || GRID_TO_UNITS
-    return new BABYLON.Vector3(x * scale, y * scale, z * scale)
-}
-
-var roundToDegrees = (rot, deg) => {
-    var radians = deg * Math.PI / 180
-    rot.x = Math.round(rot.x / radians) * radians
-    rot.y = Math.round(rot.y / radians) * radians
-    rot.z = Math.round(rot.z / radians) * radians
-    return rot
-}
-
 var CreatePuzzleShape = (shapeObject, axis, scene) => {
     let puzzle = shapeObject.points
     let shouldMirror = shapeObject.shouldMirror
@@ -629,6 +654,32 @@ var CreateColorMaterial = (colorHex, scene) => {
     return mat
 }
 
+var CreateBillboardMaterial = (lines, colorHex, scene) => {
+    let mat = billboardMaterial || new BABYLON.StandardMaterial("Material-" + colorHex, scene);
+    let tex = mat.diffuseTexture || new BABYLON.DynamicTexture("Texture-" + colorHex, {width:1024, height:512}, scene);
+    // Make the shape material
+    tex.hasAlpha = true
+    var ctx = tex.getContext();
+    mat.diffuseTexture = tex;
+    mat.backFaceCulling = false
+
+    ctx.clearRect(0, 0, tex.getSize().width, tex.getSize().height)
+    // ctx.fillStyle = colorHex;
+    // ctx.fillRect(0,0, 512, 1024);
+
+    ctx.fillStyle = '#000000'
+    lines.forEach((line, i) => {
+        ctx.font = "bold 100px serif"
+        ctx.fillText(line, 0, 128 + i * 114)
+    })
+
+    tex.update()
+    materials[colorHex] = mat
+    return mat
+}
+
+
+
 var CreatePuzzle = function(shapeArrays, shapeMat, scene) {
     var axes = ['x', 'z', 'y']
     var shapeMeshes = []
@@ -684,7 +735,7 @@ var createScene = () => {
     var scene = new BABYLON.Scene(engine)
     scene.collisionsEnabled = true
     var camera = new BABYLON.UniversalCamera('Camera',
-        scaledVector3(-10, 5, 0),
+        scaledVector3(-500, 5, 0),
         scene
     )
 
@@ -799,7 +850,7 @@ var createScene = () => {
     treasureShape.material.diffuseColor = new BABYLON.Color3(0.34, 0.31, .09)
     treasureShape.material.specularColor = new BABYLON.Color3(0.797, 0.724, .21)
     // treasureShape.material.emissiveColor = BABYLON.Color3.Yellow()
-    
+    BABYLON.Animation.CreateAndStartAnimation('float', treasureShape, 'rotation.y', 30, 120, 0, Math.PI * 2, BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE);
     
 
 
@@ -816,6 +867,27 @@ var createScene = () => {
     moon.position.y = 50
     moon.material = materialMoon
     moon.material.emissiveColor = new BABYLON.Color3(0.97, 0.94, 0.94)
+    
+    // Place a node for each message
+    messages.forEach((message) => {
+        console.log("Message", message.name, message.position)
+        let node = BABYLON.MeshBuilder.CreateIcoSphere(message.name, {
+            radius: 0.15
+        }, scene)
+        node.position = message.position
+        BABYLON.Animation.CreateAndStartAnimation('float', node, 'rotation.y', 30, 120, 0, Math.PI * 2, BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE);
+    })
+
+    // Message text node
+    var billboard = BABYLON.MeshBuilder.CreatePlane('billboard', {
+        width: 4,
+        height: 2,
+        sideOrientation: BABYLON.Mesh.DOUBLESIDE,
+    }, scene)
+    // billboard.rotation.y = -1 * Math.PI
+    billboard.billboardMode = BABYLON.Mesh.BILLBOARDMODE_Y
+    billboard.material = CreateBillboardMaterial(messages[0].lines, '#999', scene)
+    billboard.setEnabled(false)
     
     scene.registerBeforeRender(() => {
         // gameManager.puzzleParent.rotate(BABYLON.Vector3.Up(), Math.PI / 180)
@@ -1062,6 +1134,7 @@ vrHelper.raySelectionPredicate = (mesh) => {
     if (mesh.name.indexOf('Grabbable') !== -1) return true
     if (mesh.name.indexOf('Holdable') !== -1) return true
     if (mesh.name.indexOf('Ground') !== -1) return true
+    if (mesh.name.indexOf('Message') !== -1) return true
     if (mesh.name.indexOf('Door') !== -1) return true // Prevent teleporting/grabbing through walls
     return false
 };
@@ -1072,12 +1145,24 @@ vrHelper.onAfterEnteringVRObservable.add(() => {
 
 // Keep track of the selected mesh
 vrHelper.onNewMeshSelected.add((mesh) => {
+    if (!mesh) return
+    if (mesh.name.indexOf('Message') !== -1) {
+        var message = messages.find((message) => message.name === mesh.name)
+        var billboard = scene.getMeshByName('billboard')
+        billboard.position = mesh.position.clone()
+        billboard.position.y += 1.5
+        billboard.material = CreateBillboardMaterial(message.lines, '#333', scene)
+        billboard.setEnabled(true)
+        billboard.position = message.position.add(Vector3.Up())
+    }
     if (mesh.name.indexOf('Grabbable') === -1 &&
         mesh.name.indexOf('Holdable') === -1) return
     selectedMesh = mesh;
 });
 
 vrHelper.onSelectedMeshUnselected.add(() => {
+    var billboard = scene.getMeshByName('billboard')
+    if (billboard) billboard.setEnabled(false)
     selectedMesh = undefined;
 });
 

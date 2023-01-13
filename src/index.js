@@ -16,7 +16,6 @@ const RAYCAST_COOLDOWN = 20 // Frames between lamp raycasts
 const SHAPE_SCALE_V3 = new BABYLON.Vector3(SHAPE_SCALE, SHAPE_SCALE, SHAPE_SCALE)
 var shapes = []
 var materials = []
-var selectedMesh
 var grabbedMesh
 var clonedMesh
 var grabbingController
@@ -926,6 +925,20 @@ var CreatePuzzle = function(shapeArrays, shapeMat, scene) {
         var shapeMesh = shapeCSG.toMesh('Grabbable-Puzzle-' + i, shapeMat, scene, true)
         // Move the pivot to teh right spot
         shapeMesh.setPivotPoint(pivotPoint)
+        shapeMesh.onPointerDown = (pointerInfo) => {
+            grabbedMesh = shapeMesh;
+            if (clonedMesh) clonedMesh.dispose()
+            clonedMesh = grabbedMesh.clone("Clone")
+            clonedMesh.material = clonedMesh.material.clone()
+            clonedMesh.material.alpha = 0.5
+            clonedMesh.position = grabbingController.grip.position.clone()
+            clonedMesh.setParent(grabbingController.grip)
+            clonedMesh.position = clonedMesh.getPivotPoint().negate()
+            clonedMesh.scaling = clonedMesh.scaling.clone().scale(0.5)
+            startDeviceQuaternion = grabbingController.grip.rotationQuaternion.clone()
+            startMeshQuaternion = (grabbedMesh.rotationQuaternion) ? grabbedMesh.rotationQuaternion.clone() : BABYLON.Quaternion.FromEulerVector(grabbedMesh.rotation)
+            gameManager.CheckSolution()
+        }
         resultMeshes.push(shapeMesh)
     })
     // resultMeshes.push(resultCSG.toMesh('Grabbable-Test-Shape', shapeMat, scene, false))
@@ -1081,6 +1094,11 @@ var createScene = () => {
     treasureShape.position = scaledVector3(100, 4.5, 0)
     treasureShape.scaling = scaledVector3(0.25, 1, 1)
     treasureShape.name = 'Holdable-Treasure'
+    treasureShape.onPointerDown = (pointerInfo) => {
+        grabbedMesh = treasureShape;
+        gameManager.CheckSolution()
+    }
+    
 
     // Gold
     treasureShape.material.ambientColor = new BABYLON.Color3(0.24, 0.22, 0.06)
@@ -1115,6 +1133,12 @@ var createScene = () => {
         node.material.emissiveColor = new BABYLON.Color3(0.2, 0.2, 0.2)
         BABYLON.Animation.CreateAndStartAnimation('float', node, 'rotation.y', 30, 120, 0, Math.PI * 2, BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE);
         node.setEnabled(false)
+        node.onPointerPick = () => {
+            var billboard = scene.getMeshByName('billboard')
+            billboard.position = node.position.clone()
+            billboard.material = CreateBillboardMaterial(message.lines, '#333', scene)
+            billboard.setEnabled(true)
+        }
     })
 
     // Message text node
@@ -1135,22 +1159,18 @@ var createScene = () => {
 
     // Used for grabbing and rotating shapes
     scene.onBeforeRenderObservable.add(() => {
-
         // Update the grabbed object
         if (grabbedMesh && grabbingController) {
             // Put it on the user's hand
             if (grabbedMesh.name.indexOf('Holdable') !== -1) {
-                // grabbedMesh.position = grabbingController.devicePosition
-                // grabbingController.mesh.addChild(grabbedMesh)
-                grabbedMesh.position = grabbingController.mesh.position.clone()
-                grabbedMesh.position = grabbedMesh.position.subtract(grabbingController.mesh.forward)
-                // grabbedMesh.rotationQuaternion = grabbingController.rotationQuaternion 
+                grabbedMesh.position = grabbingController.grip.position.clone()
+                // grabbedMesh.position = grabbedMesh.position.subtract(0.1 * grabbingController.grip.forward)
             }
 
             // Rotation
             if (grabbedMesh.name.indexOf('Grabbable') !== -1 || 
                 grabbedMesh.name.indexOf('Holdable') !== -1 ) {
-                var currentDeviceQuaternion = grabbingController.deviceRotationQuaternion.clone()
+                var currentDeviceQuaternion = grabbingController.grip.rotationQuaternion.clone()
                 if (startDeviceQuaternion && startMeshQuaternion) {
                     var differenceQuat = currentDeviceQuaternion.multiply(BABYLON.Quaternion.Inverse(startDeviceQuaternion))
                     
@@ -1281,6 +1301,23 @@ var createScene = () => {
     var lamp2 = lamp.clone('Grabbable-Lamp-2')
     var lamp3 = lamp.clone('Grabbable-Lamp-3')
     gameManager.lamps.push(lamp1, lamp2, lamp3)
+    const lamps = [lamp, lamp1, lamp2, lamp3]
+    lamps.forEach((lamp) => {
+        lamp.onPointerDown = () => {
+            grabbedMesh = lamp;
+            if (clonedMesh) clonedMesh.dispose()
+            clonedMesh = grabbedMesh.clone("Clone")
+            clonedMesh.material = clonedMesh.material.clone()
+            clonedMesh.material.alpha = 0.5
+            clonedMesh.position = grabbingController.grip.position.clone()
+            clonedMesh.setParent(grabbingController.grip)
+            clonedMesh.position = clonedMesh.getPivotPoint().negate()
+            clonedMesh.scaling = clonedMesh.scaling.clone().scale(0.5)
+            startDeviceQuaternion = grabbingController.grip.rotationQuaternion.clone()
+            startMeshQuaternion = (grabbedMesh.rotationQuaternion) ? grabbedMesh.rotationQuaternion.clone() : BABYLON.Quaternion.FromEulerVector(grabbedMesh.rotation)
+            gameManager.CheckSolution()
+        }    
+    })
     var glow1 = glow.clone('Glow-1')
     glow1.material = glow1.material.clone()
     var glow2 = glow.clone('Glow-2')
@@ -1340,98 +1377,151 @@ gameManager.SetupNextPuzzle()
 
 
 // VR Stuff
-var vrHelper = scene.createDefaultVRExperience({
-    createDeviceOrientationCamera: false,
-    laserToggle: false
-});
-
 let floorMeshes = scene.meshes.filter(m => m.name.indexOf('Ground') !== -1)
-vrHelper.enableTeleportation({floorMeshes: floorMeshes});
+scene.createDefaultXRExperienceAsync({
+    floorMeshes: floorMeshes
+}).then((xrHelper) => {
+    // xrHelper.enableTeleportation({floorMeshes: floorMeshes});
 
-vrHelper.enableInteractions()
-// What meshes to interact with
-vrHelper.raySelectionPredicate = (mesh) => {
-    if (mesh.name.indexOf('Grabbable') !== -1) return true
-    if (mesh.name.indexOf('Holdable') !== -1) return true
-    if (mesh.name.indexOf('Ground') !== -1) return true
-    if (mesh.name.indexOf('Message') !== -1) {
-        if (mesh.isEnabled())
-        return true
-    }
-    if (mesh.name.indexOf('Door') !== -1) return true // Prevent teleporting/grabbing through walls
-    return false
-};
+    // xrHelper.enableInteractions()
+    // What meshes to interact with
+    // xrHelper.pointerSelection.raySelectionPredicate = (mesh) => {
+    //     if (mesh.name.indexOf('Grabbable') !== -1) return true
+    //     if (mesh.name.indexOf('Holdable') !== -1) return true
+    //     if (mesh.name.indexOf('Ground') !== -1) return true
+    //     if (mesh.name.indexOf('Message') !== -1) {
+    //         if (mesh.isEnabled())
+    //         return true
+    //     }
+    //     if (mesh.name.indexOf('Door') !== -1) return true // Prevent teleporting/grabbing through walls
+    //     return false
+    // };
 
-vrHelper.onAfterEnteringVRObservable.add(() => {
-    // Move the camera to the blocks and look at it
+    // TODO: When you hover over a Message mesh, show a billboard
+    // TODO: When you unhover over a Message mesh, hide the billboard
+
+    // TODO: When you click on a Grabbable/Holdable item, grab it
+    // TODO: When you unclick while holding an item, ungrab it
+
+    scene.onPointerObservable.add((pointerInfo) => {
+        switch (pointerInfo.type) {
+            case BABYLON.PointerEventTypes.POINTERDOWN:
+                if (
+                    pointerInfo &&
+                    pointerInfo.pickInfo &&
+                    pointerInfo.pickInfo.pickedMesh
+                ) {
+                    grabbingController = xrHelper.pointerSelection.getXRControllerByPointerId(pointerInfo.event.pointerId);
+                    const pickedMesh = pointerInfo.pickInfo.pickedMesh
+                    if (pickedMesh.onPointerDown) {
+                        pickedMesh.onPointerDown(pointerInfo)
+                        scene.cameras[0].detachControl()
+                        xrHelper.displayLaserPointer = false
+                    }
+                }
+                break
+            case BABYLON.PointerEventTypes.POINTERUP:
+                grabbingController = null;
+                xrHelper.displayLaserPointer = true
+                gameManager.CheckSolution()
+                if (grabbedMesh) {
+                    lastDeviceQuaternion = undefined
+                    lastDevicePosition = undefined
+                    gameManager.CheckSolution()
+                }
+                if (clonedMesh) {
+                    clonedMesh.dispose()
+                }
+                grabbedMesh = null
+                grabbingController = null
+                xrHelper.displayLaserPointer = true
+                if (!scene.cameras[0].inputs.attachedToElement) {
+                    scene.cameras[0].attachControl(canvas, true)
+                }
+                break
+            case BABYLON.PointerEventTypes.POINTERMOVE: 
+                // if (pointerInfo.pickInfo.pickedMesh)
+                    // console.log('pointerMove', pointerInfo)
+                break
+            case BABYLON.PointerEventTypes.POINTERPICK:
+                if (
+                    pointerInfo &&
+                    pointerInfo.pickInfo &&
+                    pointerInfo.pickInfo.pickedMesh
+                ) {
+                    const pickedMesh = pointerInfo.pickInfo.pickedMesh
+                    if (pickedMesh.onPointerPick) {
+                        pickedMesh.onPointerPick(pointerInfo)
+                    }
+                }
+                break
+        }
+    })
+
+    // // Keep track of the selected mesh
+    // xrHelper.onNewMeshSelected.add((mesh) => {
+    //     if (!mesh) return
+    //     if (mesh.name.indexOf('Message') !== -1) {
+    //         var message = messages.find((message) => message.name === mesh.name)
+    //         var billboard = scene.getMeshByName('billboard')
+    //         billboard.position = mesh.position.clone()
+    //         billboard.material = CreateBillboardMaterial(message.lines, '#333', scene)
+    //         billboard.setEnabled(true)
+    //     }
+    //     if (mesh.name.indexOf('Grabbable') === -1 &&
+    //         mesh.name.indexOf('Holdable') === -1) return
+    //     selectedMesh = mesh;
+    // });
+
+    // xrHelper.onSelectedMeshUnselected.add(() => {
+    //     var billboard = scene.getMeshByName('billboard')
+    //     if (billboard) billboard.setEnabled(false)
+    //     selectedMesh = undefined;
+    // });
+
+    // // Behavior of the controllers
+    // xrHelper.onControllerMeshLoaded.add((webVRController)=>{
+    //     var controllerMesh = webVRController.mesh;
+
+    //     webVRController.onTriggerStateChangedObservable.add(function(stateObject) {
+    //         // if(webVRController.hand=="left")
+    //         //grab
+    //         if(!grabbedMesh && stateObject.value > 0.1){ // Trigger started
+    //             if (selectedMesh !== undefined) {
+    //                 // Only grab grabbable
+    //                 grabbedMesh = selectedMesh
+    //                 if (clonedMesh) clonedMesh.dispose()
+    //                 clonedMesh = grabbedMesh.clone("Clone")
+    //                 clonedMesh.material = clonedMesh.material.clone()
+    //                 clonedMesh.material.alpha = 0.5
+    //                 clonedMesh.position = webVRController.devicePosition.clone()
+    //                 clonedMesh.setParent(webVRController.mesh)
+    //                 clonedMesh.position = clonedMesh.getPivotPoint().negate()
+    //                 clonedMesh.scaling = clonedMesh.scaling.clone().scale(0.5)
+    //                 startDeviceQuaternion = webVRController.deviceRotationQuaternion.clone()
+    //                 startMeshQuaternion = (grabbedMesh.rotationQuaternion) ? grabbedMesh.rotationQuaternion.clone() : BABYLON.Quaternion.FromEulerVector(grabbedMesh.rotation)
+    //                 grabbingController = webVRController
+    //                 xrHelper.displayLaserPointer = false
+    //                 gameManager.CheckSolution()
+    //             }
+    //         //ungrab   
+    //         } else if (grabbedMesh && stateObject.value <= 0.1) { // Trigger ended
+    //             if (grabbedMesh) {
+    //                 lastDeviceQuaternion = undefined
+    //                 lastDevicePosition = undefined
+    //                 gameManager.CheckSolution()
+    //             }
+    //             if (clonedMesh) {
+    //                 clonedMesh.dispose()
+    //             }
+    //             grabbedMesh = null
+    //             grabbingController = null
+    //             xrHelper.displayLaserPointer = true
+    //         }
+    //     });
+    // });
 })
 
-// Keep track of the selected mesh
-vrHelper.onNewMeshSelected.add((mesh) => {
-    if (!mesh) return
-    if (mesh.name.indexOf('Message') !== -1) {
-        var message = messages.find((message) => message.name === mesh.name)
-        var billboard = scene.getMeshByName('billboard')
-        billboard.position = mesh.position.clone()
-        billboard.material = CreateBillboardMaterial(message.lines, '#333', scene)
-        billboard.setEnabled(true)
-    }
-    if (mesh.name.indexOf('Grabbable') === -1 &&
-        mesh.name.indexOf('Holdable') === -1) return
-    selectedMesh = mesh;
-});
-
-vrHelper.onSelectedMeshUnselected.add(() => {
-    var billboard = scene.getMeshByName('billboard')
-    if (billboard) billboard.setEnabled(false)
-    selectedMesh = undefined;
-});
-
-// Behavior of the controllers
-vrHelper.onControllerMeshLoaded.add((webVRController)=>{
-    var controllerMesh = webVRController.mesh;
-    
-    webVRController.onTriggerStateChangedObservable.add(()=>{
-        // Trigger pressed event
-    });
-
-    webVRController.onTriggerStateChangedObservable.add(function(stateObject) {
-        // if(webVRController.hand=="left")
-        //grab
-        if(!grabbedMesh && stateObject.value > 0.1){ // Trigger started
-            if (selectedMesh !== undefined) {
-                // Only grab grabbable
-                grabbedMesh = selectedMesh
-                if (clonedMesh) clonedMesh.dispose()
-                clonedMesh = grabbedMesh.clone("Clone")
-                clonedMesh.material = clonedMesh.material.clone()
-                clonedMesh.material.alpha = 0.5
-                clonedMesh.position = webVRController.devicePosition.clone()
-                clonedMesh.setParent(webVRController.mesh)
-                clonedMesh.position = clonedMesh.getPivotPoint().negate()
-                clonedMesh.scaling = clonedMesh.scaling.clone().scale(0.5)
-                startDeviceQuaternion = webVRController.deviceRotationQuaternion.clone()
-                startMeshQuaternion = (grabbedMesh.rotationQuaternion) ? grabbedMesh.rotationQuaternion.clone() : BABYLON.Quaternion.FromEulerVector(grabbedMesh.rotation)
-                grabbingController = webVRController
-                vrHelper.displayLaserPointer = false
-                gameManager.CheckSolution()
-            }
-        //ungrab   
-        } else if (grabbedMesh && stateObject.value <= 0.1) { // Trigger ended
-            if (grabbedMesh) {
-                lastDeviceQuaternion = undefined
-                lastDevicePosition = undefined
-                gameManager.CheckSolution()
-            }
-            if (clonedMesh) {
-                clonedMesh.dispose()
-            }
-            grabbedMesh = null
-            grabbingController = null
-            vrHelper.displayLaserPointer = true
-        }
-    });
-});
 
 engine.runRenderLoop(() => {
     scene.render()
